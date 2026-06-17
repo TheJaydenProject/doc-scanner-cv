@@ -1,0 +1,91 @@
+# Operating System
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDEs and Editors
+# Retains core shared settings while ignoring local configurations
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.swn
+.claude/
+.cursor/
+
+# Environment and Secrets
+# Prevents credential leakage into source control
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+*.publishsettings
+credentials.json
+client_secret.json
+
+# Data files — PDFs can exceed GitHub's 100MB limit and bloat history
+data/
+
+# Logs and Local Databases
+*.log
+logs/
+*.sqlite
+*.db
+*.mp4
+build-plan.md
+repomix-output.xml
+
+# Flask instance folder
+instance/
+
+# Generated pipeline output
+output/
+
+# Built frontend assets
+static/app.js
+static/examples/
+
+# Generic Build and Dependency Directories
+# Must be customized based on your specific stack (e.g., node_modules, venv, bin)
+node_modules/
+venv/
+.venv/
+env/
+build/
+dist/
+out/
+target/
+bin/
+obj/
+coverage/
+.nyc_output/
+__pycache__/
+*.pyc
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+*.xpi
