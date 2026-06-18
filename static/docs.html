@@ -14,35 +14,104 @@
       }
 
       :root {
-        --bg: #0f0f0f;
-        --surface: #1a1a1a;
+        --bg: #000000;
+        --surface: #111111;
         --border: #2a2a2a;
+        --border-subtle: #1f1f1f;
         --text: #ffffff;
         --text-muted: #888888;
-        --accent: #2563eb;
+        --text-label: #666666;
+        --accent: #e8400c;
+        --code-bg: #0a0a0a;
+        --code-border: #222222;
+        --code-text: #cccccc;
         --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
       }
 
       body {
         background: var(--bg);
         color: var(--text);
-        font-family: var(--font);
+        font-family: var(--font-mono);
         font-size: 14px;
         line-height: 1.5;
       }
 
-      header {
-        padding: 24px 32px;
-        border-bottom: 1px solid var(--border);
+      .topnav {
+        height: 56px;
+        padding: 0 32px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 32px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg);
       }
 
-      header h1 {
-        font-size: 18px;
+      .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font);
+        font-size: 14px;
         font-weight: 600;
         letter-spacing: -0.01em;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        color: var(--text);
+        flex: 0 0 auto;
+      }
+
+      .nav-tabs {
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+      }
+
+      .nav-tab {
+        position: relative;
+        font-size: 13px;
+        color: var(--text-label);
+        text-decoration: none;
+        padding: 8px 0;
+      }
+
+      .nav-tab:hover {
+        color: var(--text-muted);
+      }
+
+      .nav-tab.active {
+        color: var(--text);
+      }
+
+      .nav-tab.active::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 2px;
+        background: var(--accent);
+        border-radius: 2px;
+      }
+
+      .nav-cta {
+        flex: 0 0 auto;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text);
+        text-decoration: none;
+        border: 1px solid var(--text);
+        border-radius: 2px;
+        padding: 8px 16px;
+      }
+
+      .nav-cta:hover {
+        background: #1a1a1a;
       }
 
       main {
@@ -67,7 +136,7 @@
       .panel h2 {
         font-size: 11px;
         font-weight: 600;
-        color: var(--text-muted);
+        color: var(--text-label);
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
@@ -99,16 +168,18 @@
         letter-spacing: 0.05em;
       }
       .method.post {
-        background: #1d4ed8;
-        color: #fff;
+        background: #1a3a1a;
+        color: #4ade80;
+        border: 1px solid #2d5a2d;
       }
       .method.get {
-        background: #166534;
-        color: #fff;
+        background: #1a2a3a;
+        color: #60a5fa;
+        border: 1px solid #1e3a5f;
       }
 
       .path {
-        font-family: "Courier New", monospace;
+        font-family: var(--font-mono);
         font-size: 14px;
         color: var(--text);
       }
@@ -126,13 +197,25 @@
         margin-bottom: 16px;
       }
 
+      thead tr {
+        background: #1a1a1a;
+      }
+
+      tbody tr:nth-child(odd) {
+        background: #0d0d0d;
+      }
+
+      tbody tr:nth-child(even) {
+        background: #111111;
+      }
+
       th {
         text-align: left;
         padding: 8px 12px;
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--text-muted);
+        color: var(--text-label);
         border-bottom: 1px solid var(--border);
       }
 
@@ -143,16 +226,16 @@
       }
 
       td code {
-        font-family: "Courier New", monospace;
+        font-family: var(--font-mono);
         font-size: 12px;
-        background: var(--bg);
+        background: var(--code-bg);
         padding: 2px 6px;
         border-radius: 3px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--code-border);
       }
 
       .status {
-        font-family: "Courier New", monospace;
+        font-family: var(--font-mono);
         font-size: 12px;
       }
       .status.ok {
@@ -161,46 +244,67 @@
       .status.err {
         color: #f87171;
       }
+      .status.warn {
+        color: #fb923c;
+      }
 
       pre {
-        background: var(--bg);
-        border: 1px solid var(--border);
+        background: var(--code-bg);
+        border: 1px solid var(--code-border);
         border-radius: 4px;
         padding: 16px;
         font-size: 12px;
-        font-family: "Courier New", monospace;
+        font-family: var(--font-mono);
         overflow-x: auto;
-        color: var(--text);
+        color: var(--code-text);
         line-height: 1.6;
       }
 
       .flow {
-        font-family: "Courier New", monospace;
+        font-family: var(--font-mono);
         font-size: 13px;
         color: var(--text-muted);
-        background: var(--bg);
-        border: 1px solid var(--border);
+        background: var(--code-bg);
+        border: 1px solid var(--code-border);
         border-radius: 4px;
         padding: 16px;
         line-height: 2;
       }
-
-      .back-link {
-        font-size: 13px;
-        color: var(--text-muted);
-        text-decoration: none;
-      }
-      .back-link:hover {
-        color: var(--text);
-      }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Doc Scanner CV</h1>
-      <nav>
-        <a href="/" class="back-link">&#x2190; Back to App</a>
+    <header class="topnav">
+      <a class="nav-brand" href="/">
+        <svg
+          class="brand-mark"
+          width="18"
+          height="18"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M2 7V2h5" />
+          <path d="M13 2h5v5" />
+          <path d="M18 13v5h-5" />
+          <path d="M7 18H2v-5" />
+        </svg>
+        <span>Doc Scanner CV</span>
+      </a>
+      <nav class="nav-tabs">
+        <a class="nav-tab" href="/">App</a>
+        <a class="nav-tab active" href="/docs">API Docs</a>
       </nav>
+      <a
+        class="nav-cta"
+        href="https://github.com/TheJaydenProject/doc-scanner-cv"
+        target="_blank"
+        rel="noopener"
+      >
+        GitHub
+      </a>
     </header>
 
     <main>
@@ -274,7 +378,7 @@
                 <td>Missing file, wrong MIME type, empty file</td>
               </tr>
               <tr>
-                <td><span class="status err">429</span></td>
+                <td><span class="status warn">429</span></td>
                 <td><code>{ error }</code></td>
                 <td>Rate limit exceeded or server at capacity</td>
               </tr>

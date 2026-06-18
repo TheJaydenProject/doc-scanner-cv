@@ -50,7 +50,7 @@ async function refresh() {
           {
             label: "Character Count",
             data: charCounts,
-            backgroundColor: "#4ad6c8",
+            backgroundColor: "#ffffff",
             borderRadius: 2,
           },
         ],
@@ -62,7 +62,7 @@ async function refresh() {
           title: {
             display: true,
             text: "Character Count — Recent Scans",
-            color: "#f2f4f6",
+            color: "#ffffff",
             font: { size: 12, weight: 600 },
             padding: { bottom: 10 },
           },
@@ -73,8 +73,8 @@ async function refresh() {
           },
         },
         scales: {
-          x: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
-          y: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
+          x: { ticks: { color: "#666666" }, grid: { color: "#1f1f1f" } },
+          y: { ticks: { color: "#666666" }, grid: { color: "#1f1f1f" } },
         },
       },
     });
@@ -87,7 +87,7 @@ async function refresh() {
           {
             label: "Processing Time (ms)",
             data: processingTimes,
-            borderColor: "#4ad6c8",
+            borderColor: "#ffffff",
             backgroundColor: "transparent",
             tension: 0,
             pointRadius: 3,
@@ -101,7 +101,7 @@ async function refresh() {
           title: {
             display: true,
             text: "Processing Time (ms) — Recent Scans",
-            color: "#f2f4f6",
+            color: "#ffffff",
             font: { size: 12, weight: 600 },
             padding: { bottom: 10 },
           },
@@ -112,8 +112,8 @@ async function refresh() {
           },
         },
         scales: {
-          x: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
-          y: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
+          x: { ticks: { color: "#666666" }, grid: { color: "#1f1f1f" } },
+          y: { ticks: { color: "#666666" }, grid: { color: "#1f1f1f" } },
         },
       },
     });

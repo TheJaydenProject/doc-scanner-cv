@@ -7,32 +7,30 @@
 }
 
 :root {
-  /* Surfaces — canvas is the darkest, each step up is a touch lighter */
-  --canvas: #0a0d10;
-  --surface-1: #12161b;
-  --surface-2: #1b212a;
-  --inset: #07090b;
+  /* Surfaces — page is pure black, panels lift in small steps */
+  --canvas: #000000;
+  --surface-1: #111111;
+  --surface-2: #1a1a1a;
+  --inset: #0a0a0a;
 
   /* Borders — progression from near-invisible to emphasis */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-subtle: #1f1f1f;
+  --border: #2a2a2a;
+  --border-strong: #3a3a3a;
+  --control-border: #333333;
 
   /* Text hierarchy */
-  --ink: #f2f4f6;
-  --ink-secondary: #a8b0ba;
-  --ink-tertiary: #6b7480;
-  --ink-faint: #454c56;
+  --ink: #ffffff;
+  --ink-secondary: #888888;
+  --ink-tertiary: #666666;
 
-  /* Brand accent — scanner phosphor cyan */
-  --scan: #4ad6c8;
-  --scan-strong: #72e3d7;
-  --scan-dim: rgba(74, 214, 200, 0.14);
+  /* Accent — reserved for the active nav indicator only */
+  --accent: #e8400c;
 
-  --error: #e2685f;
+  --error: #f87171;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, "SF Mono", monospace;
+  --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -41,8 +39,8 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
 
   --nav-height: 56px;
 }
@@ -56,7 +54,7 @@ body {
 body {
   background: var(--canvas);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -75,14 +73,15 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--canvas);
 }
 
 .nav-brand {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -90,7 +89,7 @@ body {
 }
 
 .brand-mark {
-  color: var(--scan);
+  color: var(--ink);
   flex: 0 0 auto;
 }
 
@@ -129,7 +128,7 @@ body {
   right: 0;
   bottom: -1px;
   height: 2px;
-  background: var(--scan);
+  background: var(--accent);
   border-radius: 2px;
 }
 
@@ -137,15 +136,14 @@ body {
   flex: 0 0 auto;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--ink-secondary);
+  color: var(--ink);
   text-decoration: none;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--ink);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-4);
 }
 
 .nav-cta:hover {
-  color: var(--ink);
   background: var(--surface-2);
 }
 
@@ -211,8 +209,8 @@ button {
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
-  background: var(--scan);
-  color: #04201c;
+  background: var(--ink);
+  color: #000000;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -225,13 +223,13 @@ button:disabled {
 }
 
 button:hover:not(:disabled) {
-  background: var(--scan-strong);
+  background: #e5e5e5;
 }
 
 button:focus-visible,
 .file-pick-btn:focus-visible,
 .nav-tab:focus-visible {
-  outline: 2px solid var(--scan);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -273,7 +271,7 @@ button:focus-visible,
   right: 0;
   bottom: -7px;
   height: 2px;
-  background: var(--scan);
+  background: var(--ink);
   border-radius: 2px;
 }
 
@@ -290,8 +288,8 @@ button:focus-visible,
 }
 
 .stage-tab.active .stage-index {
-  border-color: var(--scan);
-  color: var(--scan);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 #stage-viewer {
@@ -319,8 +317,9 @@ button:focus-visible,
   width: auto;
   height: auto;
   max-width: 100%;
+  min-height: 38vh;
   max-height: 42vh;
-  background: var(--inset);
+  background: var(--surface-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
 }
@@ -333,16 +332,16 @@ button:focus-visible,
 }
 
 .detection-overlay rect {
-  fill: rgba(74, 214, 200, 0.12);
-  stroke: var(--scan);
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: var(--ink);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
 }
 
 .detection-overlay rect.hovered {
-  fill: rgba(74, 214, 200, 0.32);
-  stroke: var(--scan-strong);
+  fill: rgba(255, 255, 255, 0.28);
+  stroke: var(--ink);
   stroke-width: 2.5;
 }
 
@@ -355,7 +354,7 @@ figure {
 
 figcaption {
   font-size: 11.5px;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 figure img {
@@ -369,8 +368,9 @@ figure img {
 
 textarea {
   width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  max-height: 160px;
+  overflow-y: auto;
   background: var(--inset);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -383,7 +383,7 @@ textarea {
 
 textarea:focus {
   outline: none;
-  border-color: var(--scan);
+  border-color: var(--ink);
 }
 
 .error {
@@ -400,7 +400,7 @@ textarea:focus {
 }
 
 .stat-card {
-  background: var(--inset);
+  background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
@@ -421,7 +421,7 @@ textarea:focus {
   font-size: 22px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--scan);
+  color: var(--ink);
 }
 
 /* Dashboard runs in the narrow left rail — denser than the result stats */
@@ -452,31 +452,31 @@ canvas {
   height: 100% !important;
 }
 
-/* Examples carousel */
+/* Examples grid */
 .section-desc {
   font-size: 12.5px;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 .example-grid {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
+  overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
-  align-items: center;
+  align-items: flex-start;
+  align-content: flex-start;
   scrollbar-width: thin;
 }
 
 .example-card {
-  flex: 0 0 auto;
-  scroll-snap-align: start;
-  width: min(560px, 80%);
+  flex: 1 1 480px;
+  min-width: 480px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-4);
-  background: var(--surface-2);
+  background: var(--surface-1);
 }
 
 .example-images {
@@ -487,12 +487,13 @@ canvas {
 }
 
 .example-images img {
-  max-height: 30vh;
+  min-height: 220px;
+  max-height: 38vh;
 }
 
 .arrow {
   font-size: 18px;
-  color: var(--scan);
+  color: var(--ink-tertiary);
   text-align: center;
 }
 
@@ -509,7 +510,7 @@ canvas {
 .empty-state {
   margin: auto;
   font-size: 13px;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 /* Scan-in-progress sweep indicator */
@@ -533,7 +534,7 @@ canvas {
   position: absolute;
   inset: 0;
   width: 40%;
-  background: linear-gradient(90deg, transparent, var(--scan), transparent);
+  background: linear-gradient(90deg, transparent, var(--ink), transparent);
   animation: sweep 1.2s ease-in-out infinite;
 }
 
@@ -593,10 +594,11 @@ canvas {
   border: 0;
 }
 
-/* Custom file-picker button — secondary style */
-.file-pick-btn {
+/* Custom file-picker button and Copy Text — secondary style */
+.file-pick-btn,
+#copy-btn {
   background: transparent;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--control-border);
   color: var(--ink);
   max-width: 100%;
   overflow: hidden;
@@ -604,7 +606,8 @@ canvas {
   white-space: nowrap;
 }
 
-.file-pick-btn:hover:not(:disabled) {
+.file-pick-btn:hover:not(:disabled),
+#copy-btn:hover:not(:disabled) {
   background: var(--surface-2);
   opacity: 1;
 }
