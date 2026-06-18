@@ -11,4 +11,4 @@ numpy==2.4.4
 
 # Run once locally to export models/doc_classifier.onnx, then uninstall.
 # Not needed at runtime — excluded from Docker image.
-# pip install torch torchvision
+# pip install torch==2.12.1 torchvision==0.27.1
