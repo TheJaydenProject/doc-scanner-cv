@@ -9,7 +9,8 @@ _CLASS_LABELS = {"printed", "handwritten", "mixed"}
 
 def test_detect_text_regions_returns_annotated_and_list(document_image_bytes):
     from pipeline.scanner import run_pipeline, binarize_printed
-    binarized = binarize_printed(run_pipeline(document_image_bytes))
+    clean_image, _ = run_pipeline(document_image_bytes)
+    binarized = binarize_printed(clean_image)
     annotated, detections = detect_text_regions(binarized)
 
     # annotated must be a 3-channel image (BGR for display).
@@ -38,6 +39,7 @@ def test_classify_document_returns_valid_label():
     result = classify_document(grey)
     assert result["label"] in _CLASS_LABELS
     assert 0.0 <= result["confidence"] <= 1.0
+    assert result["source"] == "model"
 
 
 def test_classify_document_handles_bgr_input():
@@ -45,3 +47,12 @@ def test_classify_document_handles_bgr_input():
     bgr = np.ones((300, 300, 3), dtype=np.uint8) * 128
     result = classify_document(bgr)
     assert result["label"] in _CLASS_LABELS
+
+
+def test_classify_document_bright_image_uses_printed_heuristic():
+    """A near-white image (flat digital document) bypasses ONNX inference entirely."""
+    bright = np.ones((400, 400, 3), dtype=np.uint8) * 250
+    result = classify_document(bright)
+    assert result["label"] == "printed"
+    assert result["confidence"] == 1.0
+    assert result["source"] == "heuristic"

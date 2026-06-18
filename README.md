@@ -12,11 +12,12 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
 
 1. **Preprocess**: The uploaded image is decoded, converted to grayscale, and smoothed with a 7x7 Gaussian blur to suppress edge noise before contour detection.
 2. **Contour detection**: Three-pass strategy. Pass 1 approximates the top eight contours by area and returns the first clean four-point quad. Pass 2 applies a convex hull to the largest contour and approximates again. Pass 3 computes `minAreaRect` over all Canny edge pixels, covering low-contrast cases where the document boundary never closes into a contour.
-3. **Perspective transform**: Corner points are sorted into `[top-left, top-right, bottom-right, bottom-left]` order using per-point coordinate sums and differences. `getPerspectiveTransform` and `warpPerspective` produce a flat, axis-aligned crop.
-4. **Binarize**: Adaptive Gaussian thresholding (block size 51, C=15) converts the warped image to a two-value mask suited for OCR.
-5. **Text region detection**: MSER runs on the binarized image. Bounding boxes under 100 px² are discarded as noise artifacts. Remaining regions are drawn onto an annotated BGR copy returned to the caller.
-6. **Document classification**: A MobileNetV2 ONNX model (opset 18) classifies the binarized image as `printed`, `handwritten`, or `mixed`. The `InferenceSession` is loaded once per process and reused across all requests to avoid the 100-300ms initialization cost.
-7. **OCR**: pytesseract extracts text from the binarized image. The result, character count, word count, processing time, and annotated image are persisted to SQLite and returned to the client.
+3. **Boundary validation**: The detected quad's area is compared against the full frame (shoelace formula). A ratio outside `[0.15, 0.97]` means the contour isn't a real document edge — too small is a stray text blob or noise artifact, too large is the contour just tracing the image frame (e.g. a flat digital screenshot with no physical boundary). Either way, the perspective warp is skipped and the original frame passes through unchanged.
+4. **Perspective transform**: Only run when the boundary passes validation. Corner points are sorted into `[top-left, top-right, bottom-right, bottom-left]` order using per-point coordinate sums and differences. `getPerspectiveTransform` and `warpPerspective` produce a flat, axis-aligned crop, then a symmetric 2.5% inset crop removes the binding/shadow sliver left at the contour edge.
+5. **Document classification**: Runs on the clean image (warped, or the original frame if the warp was skipped) before any binarization. A bright-pixel heuristic checks for flat digital documents directly — if over 85% of pixels exceed luminance 240, the image is classified `printed` immediately, bypassing the ONNX model. Otherwise, a MobileNetV2 ONNX model (opset 18) classifies the image as `printed`, `handwritten`, or `mixed`. The `InferenceSession` is loaded once per process and reused across all requests to avoid the 100-300ms initialization cost.
+6. **Binarize**: Branches by predicted type. `printed` uses Otsu's threshold (predictable bimodal contrast on flat ink); `handwritten`/`mixed` use adaptive Gaussian thresholding on the LAB lightness channel (block size 51, C=15), which tolerates uneven lighting and colored backgrounds better.
+7. **Text region detection**: MSER runs on the binarized image. Bounding boxes under 100 px² are discarded as noise artifacts. Detected regions are returned as raw coordinates for the frontend to draw its own overlay.
+8. **OCR**: pytesseract extracts text from the binarized image using a page segmentation mode chosen by document type — PSM 3 (fully automatic page segmentation) for `printed`, which handles multi-paragraph layouts; PSM 6 (single uniform text block) for `handwritten`/`mixed`, which fits a tightly-cropped note. The result, character count, word count, processing time, and both clean/binarized images are persisted to SQLite and returned to the client.
 
 ---
 
@@ -29,19 +30,21 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
       |
   [Contour]         Canny -> morphological close -> 3-pass quad extraction
       |
-  [Perspective]     4-point warp -> axis-aligned document crop
+  [Boundary check]  area ratio outside [0.15, 0.97] -> skip warp (flat digital doc or stray contour)
       |
-  [Binarize]        adaptive Gaussian threshold (block=51, C=15)
+  [Perspective]     4-point warp -> axis-aligned crop + inset (skipped if boundary check failed)
       |
-  [MSER Detector]   text region bounding boxes + annotated BGR image
+  [Classifier]      bright-pixel heuristic -> printed, else MobileNetV2 ONNX -> printed | handwritten | mixed
       |
-  [Classifier]      MobileNetV2 ONNX -> printed | handwritten | mixed
+  [Binarize]        Otsu (printed) | LAB-channel adaptive threshold (handwritten | mixed)
       |
-  [OCR]             pytesseract -> extracted text
+  [MSER Detector]   text region bounding boxes
+      |
+  [OCR]             pytesseract, psm 3 (printed) | psm 6 (handwritten | mixed) -> extracted text
       |
   [SQLite]          ScanRecord (char_count, word_count, processing_time_ms)
       |
-  [Response]        job_id -> poll -> { text, warped_image_b64, binarized_image_b64, detections, doc_type, ... }
+  [Response]        job_id -> poll -> { text, warped_image_b64, binarized_image_b64, detections, doc_type, doc_type_source, ... }
 
 Flask API           Flask + Gunicorn (1 worker, 3 concurrent scan threads)
 Frontend            Vue 3 SPA (ScanPanel, ResultPanel, Dashboard with Chart.js)
@@ -230,7 +233,8 @@ Successful result shape:
     "detections": [[12, 34, 18, 9]],
     "detection_count": 47,
     "doc_type": "printed",
-    "doc_type_confidence": 0.9871
+    "doc_type_confidence": 0.9871,
+    "doc_type_source": "heuristic"
   }
 }
 ```
@@ -278,8 +282,8 @@ Three test modules cover API contract, scanner logic, and the detector/classifie
 | Module | What it tests |
 |--------|---------------|
 | `test_api.py` | Missing file, wrong MIME type, empty file, 202 shape with job_id, job not found, history list shape, metrics keys, async job resolves to `failed` on a blank image, async job resolves to `complete` with correct result keys on a synthetic document image |
-| `test_pipeline.py` | `ContourNotFoundError` raised on corrupt image bytes; blank image (no contour) falls back to the raw, unbinarized BGR frame; `binarize_printed` and `binarize_handwritten` each return a single-channel array containing only 0 and 255 |
-| `test_detector.py` | `detect_text_regions` return types and shapes; noise bounding boxes filtered; `classify_document` returns a valid label string; BGR input handled correctly by classifier preprocessing |
+| `test_pipeline.py` | `ContourNotFoundError` raised on corrupt image bytes; blank image (no contour) falls back to the raw, unbinarized BGR frame with `warped=False`; a contour covering nearly the full frame (flat digital document) or an implausibly small fraction (stray text blob) both skip the warp; `_quad_area_ratio` shoelace math is correct on known quads; `binarize_printed` and `binarize_handwritten` each return a single-channel array containing only 0 and 255 |
+| `test_detector.py` | `detect_text_regions` return types and shapes; noise bounding boxes filtered; `classify_document` returns a valid label string and the correct `source` (`model` vs `heuristic`); a near-white image is classified `printed` via the heuristic without running ONNX inference; BGR input handled correctly by classifier preprocessing |
 
 Run the suite:
 
@@ -303,6 +307,7 @@ pytest tests/ -v
 - [x] Examples gallery with before/after image pairs
 - [x] Static API documentation page
 - [x] Live VPS deployment
+- [x] Flat digital document handling: boundary-ratio check skips the perspective warp on implausible contours, a bright-pixel heuristic classifies flat documents as `printed` without the untrained ONNX head, and OCR page segmentation mode is chosen by document type
 - [ ] GitHub Actions CI
 
 ---

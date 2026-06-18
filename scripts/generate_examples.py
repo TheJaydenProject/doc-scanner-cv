@@ -26,7 +26,7 @@ while True:
         image_bytes = f.read()
 
     try:
-        clean_image = run_pipeline(image_bytes)
+        clean_image, _ = run_pipeline(image_bytes)
         doc_type = classify_document(clean_image)
         if doc_type["label"] == "printed":
             result = binarize_printed(clean_image)

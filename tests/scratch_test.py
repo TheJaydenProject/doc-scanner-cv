@@ -16,13 +16,14 @@ with open(IMAGE_PATH, "rb") as f:
     image_bytes = f.read()
 
 # Step 1 — scanner: perspective correction, inset crop, no binarization
-clean_image = run_pipeline(image_bytes)
+# (skipped entirely for flat digital documents with no real boundary)
+clean_image, warped = run_pipeline(image_bytes)
 cv2.imwrite(os.path.join(OUTPUT_DIR, "output_clean.png"), clean_image)
-print(f"Step 1: {OUTPUT_DIR}/output_clean.png written.")
+print(f"Step 1: {OUTPUT_DIR}/output_clean.png written. (warped: {warped})")
 
 # Step 2 — classifier runs on the clean image, before any binarization
 result = classify_document(clean_image)
-print(f"Step 2: {result['label']} (confidence: {result['confidence']:.2%})")
+print(f"Step 2: {result['label']} (confidence: {result['confidence']:.2%}, source: {result['source']})")
 
 # Step 3 — branch binarization by predicted type
 if result["label"] == "printed":
@@ -37,5 +38,5 @@ annotated, detections = detect_text_regions(binarized)
 cv2.imwrite(os.path.join(OUTPUT_DIR, "output_annotated.png"), annotated)
 print(f"Step 4: {len(detections)} text regions detected. {OUTPUT_DIR}/output_annotated.png written.")
 
-text = extract_text(binarized)
+text = extract_text(binarized, doc_type=result["label"])
 print(f"Step 4: extracted {len(text)} characters.")

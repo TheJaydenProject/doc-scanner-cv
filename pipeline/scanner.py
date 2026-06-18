@@ -73,6 +73,24 @@ def order_points(pts: np.ndarray) -> np.ndarray:
     return rect
 
 
+# A contour ratio outside [MIN, MAX] means find_document_contour locked onto
+# something other than a real document boundary: below MIN it's a stray text
+# blob or noise artifact; above MAX it's just tracing the image frame itself
+# (e.g. a flat digital screenshot with no physical boundary at all).
+MIN_CONTOUR_AREA_RATIO = 0.15
+MAX_CONTOUR_AREA_RATIO = 0.97
+
+
+def _quad_area_ratio(contour: np.ndarray, image_shape: tuple) -> float:
+    """Shoelace-formula area of the 4-point contour as a fraction of the full image area."""
+    pts = contour.reshape(4, 2).astype(np.float64)
+    x = pts[:, 0]
+    y = pts[:, 1]
+    quad_area = 0.5 * abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+    image_area = image_shape[0] * image_shape[1]
+    return quad_area / image_area
+
+
 INSET_RATIO = 0.025
 
 
@@ -131,18 +149,30 @@ def binarize_handwritten(image: np.ndarray) -> np.ndarray:
     )
 
 
-def run_pipeline(image_bytes: bytes) -> np.ndarray:
+def run_pipeline(image_bytes: bytes) -> tuple[np.ndarray, bool]:
     """
-    Runs perspective correction only. Returns the clean, unbinarized,
-    warped BGR image (or the raw decoded frame if no document boundary
-    is found). Callers must classify_document() on this result, then
+    Runs perspective correction only. Returns (image, warped):
+    image is the clean, unbinarized BGR frame (warped, or raw if skipped);
+    warped is False when no document boundary was found, or when the
+    detected quad's area ratio falls outside [MIN_CONTOUR_AREA_RATIO,
+    MAX_CONTOUR_AREA_RATIO] — too small means the contour locked onto a
+    stray text blob or noise artifact rather than a document edge; too
+    large means it just traced the image frame (e.g. a flat digital
+    screenshot with no physical boundary). Either way, warping it would
+    distort rather than correct the image.
+    Callers must classify_document() on this result, then
     pick binarize_printed() or binarize_handwritten() before OCR.
     Raises ContourNotFoundError only if the image bytes cannot be decoded.
     """
     blurred = preprocess(image_bytes)
     try:
         contour = find_document_contour(blurred)
-        return perspective_transform(image_bytes, contour)
+        np_array = np.frombuffer(image_bytes, np.uint8)
+        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+        ratio = _quad_area_ratio(contour, image.shape[:2])
+        if ratio < MIN_CONTOUR_AREA_RATIO or ratio > MAX_CONTOUR_AREA_RATIO:
+            return image, False
+        return perspective_transform(image_bytes, contour), True
     except ContourNotFoundError:
         np_array = np.frombuffer(image_bytes, np.uint8)
-        return cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+        return cv2.imdecode(np_array, cv2.IMREAD_COLOR), False

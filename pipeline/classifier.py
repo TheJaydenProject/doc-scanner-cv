@@ -21,6 +21,16 @@ def _get_session(model_path: str = "models/doc_classifier.onnx") -> ort.Inferenc
     return _session
 
 
+BRIGHT_PIXEL_THRESHOLD = 0.85
+BRIGHT_LUMINANCE_CUTOFF = 240
+
+
+def _is_likely_printed_document(image: np.ndarray) -> bool:
+    gray = image if len(image.shape) == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    bright_ratio = np.sum(gray > BRIGHT_LUMINANCE_CUTOFF) / gray.size
+    return bright_ratio > BRIGHT_PIXEL_THRESHOLD
+
+
 def _preprocess(image: np.ndarray) -> np.ndarray:
     if len(image.shape) == 2:
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
@@ -39,12 +49,21 @@ def classify_document(image: np.ndarray) -> dict[str, object]:
     """
     Runs ONNX inference and returns the predicted class and confidence.
 
+    A high proportion of near-white pixels strongly indicates a flat digital
+    document (typed PDF/screenshot export) rather than a photographed page —
+    that case is classified directly as printed, bypassing the ONNX model
+    whose head is still randomly initialised and unreliable on these inputs.
+
     Returns:
         {
             "label": "printed" | "handwritten" | "mixed",
-            "confidence": float  # 0.0 - 1.0, softmax probability
+            "confidence": float,  # 0.0 - 1.0, softmax probability
+            "source": "heuristic" | "model",
         }
     """
+    if _is_likely_printed_document(image):
+        return {"label": "printed", "confidence": 1.0, "source": "heuristic"}
+
     session = _get_session()
     input_tensor = _preprocess(image)
     logits: np.ndarray = session.run(None, {_INPUT_NAME: input_tensor})[0][0]
@@ -56,4 +75,5 @@ def classify_document(image: np.ndarray) -> dict[str, object]:
     return {
         "label": _CLASS_LABELS[predicted_index],
         "confidence": round(float(probabilities[predicted_index]), 4),
+        "source": "model",
     }

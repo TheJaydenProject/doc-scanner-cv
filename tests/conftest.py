@@ -58,6 +58,32 @@ def corrupt_image_bytes() -> bytes:
 
 
 @pytest.fixture
+def flat_document_image_bytes() -> bytes:
+    """
+    A white canvas with a thin border right at the edges — mimics a flat
+    digital screenshot whose frame gets picked up as a contour even though
+    it covers almost the entire image (no real document boundary).
+    """
+    canvas = np.ones((600, 800, 3), dtype=np.uint8) * 255
+    cv2.rectangle(canvas, (2, 2), (797, 597), (0, 0, 0), 2)
+    _, buffer = cv2.imencode(".jpg", canvas)
+    return buffer.tobytes()
+
+
+@pytest.fixture
+def small_blob_image_bytes() -> bytes:
+    """
+    A white canvas with one small isolated rectangle — mimics a flat document
+    where contour detection locks onto a stray text blob instead of a real
+    document boundary (the contour ratio ends up implausibly small).
+    """
+    canvas = np.ones((600, 800, 3), dtype=np.uint8) * 255
+    cv2.rectangle(canvas, (350, 280), (410, 320), (0, 0, 0), 2)
+    _, buffer = cv2.imencode(".jpg", canvas)
+    return buffer.tobytes()
+
+
+@pytest.fixture
 def document_image_bytes() -> bytes:
     """
     Synthetic document image: white rectangle on a dark background.

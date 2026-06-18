@@ -74,7 +74,7 @@ def _run_scan_job(
         start = time.time()
 
         try:
-            clean_image = run_pipeline(image_bytes)
+            clean_image, _ = run_pipeline(image_bytes)
 
             # Classify before any destructive pixel alteration — the clean,
             # warped image carries far more signal than a binarized one.
@@ -89,7 +89,7 @@ def _run_scan_job(
             # its own interactive overlay; the burned-in annotated image is unused.
             _, detections = detect_text_regions(binarized)
 
-            text = extract_text(binarized)
+            text = extract_text(binarized, doc_type=doc_type["label"])
 
             def encode_png(image) -> str:
                 _, buffer = cv2.imencode(".png", image)
@@ -122,6 +122,7 @@ def _run_scan_job(
                     "detection_count": len(detections),
                     "doc_type": doc_type["label"],
                     "doc_type_confidence": doc_type["confidence"],
+                    "doc_type_source": doc_type["source"],
                 },
             }
 
