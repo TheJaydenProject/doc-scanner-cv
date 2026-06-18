@@ -22,20 +22,20 @@ function openLightbox(src: string) {
           <figure>
             <figcaption>Original</figcaption>
             <img
-              :src="`/static/examples/note${n}_original.jpg`"
+              :src="`/examples/note${n}_original.jpg`"
               :alt="`Note ${n} original`"
               class="lightbox-trigger"
-              @click="openLightbox(`/static/examples/note${n}_original.jpg`)"
+              @click="openLightbox(`/examples/note${n}_original.jpg`)"
             />
           </figure>
           <span class="arrow">&#x2192;</span>
           <figure>
             <figcaption>Scanned</figcaption>
             <img
-              :src="`/static/examples/note${n}_scanned.png`"
+              :src="`/examples/note${n}_scanned.png`"
               :alt="`Note ${n} scanned`"
               class="lightbox-trigger"
-              @click="openLightbox(`/static/examples/note${n}_scanned.png`)"
+              @click="openLightbox(`/examples/note${n}_scanned.png`)"
             />
           </figure>
         </div>
