@@ -10,8 +10,20 @@ services:
     expose:
       - "5000"
     networks:
-      - web
+      - internal
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-doc-scanner-cv
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - doc-scanner-cv
+    networks:
+      - internal
 
 networks:
-  web:
-    external: true
+  internal:
+    driver: bridge
