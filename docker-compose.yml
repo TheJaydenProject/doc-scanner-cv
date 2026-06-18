@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  doc-scanner-cv:
+    build: .
+    container_name: doc-scanner-cv
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/instance   # Persists scans.db outside the container
+    expose:
+      - "5000"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
