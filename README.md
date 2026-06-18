@@ -300,7 +300,7 @@ pytest tests/ -v
 - [x] Docker + Cloudflare Tunnel configuration
 - [x] Examples gallery with before/after image pairs
 - [x] Static API documentation page
-- [ ] Live VPS deployment
+- [x] Live VPS deployment
 - [ ] GitHub Actions CI
 
 ---
