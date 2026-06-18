@@ -4,7 +4,7 @@ from models import db
 from api.documents import documents_bp, executor, limiter
 
 def create_app() -> Flask:
-    app = Flask(__name__, static_folder="static")
+    app = Flask(__name__, static_folder="static", static_url_path="")
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///scans.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # 2MB max. Stricter than default to protect VPS from large payload abuse.
