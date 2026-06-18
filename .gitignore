@@ -57,6 +57,7 @@ instance/
 
 # Generated pipeline output
 output/
+test_images/
 
 # Built frontend assets (Vite output)
 static/index.html
