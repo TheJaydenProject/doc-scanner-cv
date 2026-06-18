@@ -65,7 +65,7 @@ main {
   letter-spacing: 0.05em;
 }
 
-label, .file-label {
+label {
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -187,7 +187,6 @@ textarea:focus {
 }
 
 canvas {
-  width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 4px;
