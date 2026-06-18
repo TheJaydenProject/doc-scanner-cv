@@ -111,11 +111,14 @@ function showError(message: string) {
       @change="onFileChange"
     />
 
-    <button type="button" class="file-pick-btn" @click="fileInput?.click()">
-      {{ selectedFileName || "Choose File" }}
-    </button>
+    <div class="file-pick-group">
+      <button type="button" class="file-pick-btn" @click="fileInput?.click()">
+        {{ selectedFileName || "Choose File" }}
+      </button>
+      <p v-if="selectedFileName" class="file-hint">Click to choose a different file</p>
+    </div>
 
-    <button :disabled="scanDisabled" @click="onScan">Scan Document</button>
+    <button id="scan-btn" :disabled="scanDisabled" @click="onScan">Scan Document</button>
     <div v-if="loading" class="scan-progress" id="loading" role="status" aria-live="polite">
       <span>Processing…</span>
       <div class="sweep-track">

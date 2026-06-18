@@ -56,6 +56,7 @@ async function refresh() {
         ],
       },
       options: {
+        responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
@@ -95,6 +96,7 @@ async function refresh() {
         ],
       },
       options: {
+        responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },

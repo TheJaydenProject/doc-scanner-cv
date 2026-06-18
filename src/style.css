@@ -107,14 +107,15 @@ body {
   border: none;
   font-family: inherit;
   font-size: 13px;
-  color: var(--ink-tertiary);
+  color: #aaaaaa;
   cursor: pointer;
   padding: var(--space-2) 0;
   text-decoration: none;
+  transition: color 150ms ease;
 }
 
 .nav-tab:hover {
-  color: var(--ink-secondary);
+  color: #ffffff;
 }
 
 .nav-tab.active {
@@ -152,7 +153,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(360px, 420px) 1fr;
+  grid-template-columns: 420px 1fr;
   gap: var(--space-5);
   padding: var(--space-5);
 }
@@ -215,6 +216,7 @@ button {
   border-radius: var(--radius-sm);
   cursor: pointer;
   width: fit-content;
+  transition: background 150ms ease;
 }
 
 button:disabled {
@@ -223,7 +225,12 @@ button:disabled {
 }
 
 button:hover:not(:disabled) {
-  background: #e5e5e5;
+  background: #e0e0e0;
+}
+
+#scan-btn:hover:not(:disabled),
+#copy-btn:hover:not(:disabled) {
+  transform: scale(1.01);
 }
 
 button:focus-visible,
@@ -248,16 +255,17 @@ button:focus-visible,
   border: none;
   font-family: inherit;
   font-size: 12.5px;
-  color: var(--ink-tertiary);
+  color: #aaaaaa;
   cursor: pointer;
   padding: var(--space-2) 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  transition: color 150ms ease;
 }
 
 .stage-tab:hover {
-  color: var(--ink-secondary);
+  color: #ffffff;
 }
 
 .stage-tab.active {
@@ -407,6 +415,11 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  transition: background 150ms ease;
+}
+
+.stat-card:hover {
+  background: var(--surface-2);
 }
 
 .stat-label {
@@ -440,7 +453,8 @@ textarea:focus {
 }
 
 .chart-box {
-  height: 128px;
+  width: 100%;
+  height: 160px;
   background: var(--inset);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -473,10 +487,17 @@ canvas {
 .example-card {
   flex: 1 1 480px;
   min-width: 480px;
-  border: 1px solid var(--border);
+  border: 1px solid #444444;
   border-radius: var(--radius-md);
   padding: var(--space-4);
   background: var(--surface-1);
+  box-shadow: 0 0 0 1px transparent;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.example-card:hover {
+  border-color: #666666;
+  box-shadow: 0 0 0 1px #444444;
 }
 
 .example-images {
@@ -594,20 +615,30 @@ canvas {
   border: 0;
 }
 
-/* Custom file-picker button and Copy Text — secondary style */
-.file-pick-btn,
-#copy-btn {
-  background: transparent;
+/* Custom file-picker button */
+.file-pick-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.file-pick-btn {
+  background: var(--surface-2);
   border: 1px solid var(--control-border);
   color: var(--ink);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease;
 }
 
-.file-pick-btn:hover:not(:disabled),
-#copy-btn:hover:not(:disabled) {
-  background: var(--surface-2);
-  opacity: 1;
+.file-pick-btn:hover:not(:disabled) {
+  background: var(--border);
+  border-color: #555555;
+}
+
+.file-hint {
+  font-size: 11px;
+  color: var(--ink-tertiary);
 }
