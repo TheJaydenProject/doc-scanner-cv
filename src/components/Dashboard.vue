@@ -32,7 +32,10 @@ async function refresh() {
     avgTime.value = `${data.avg_processing_time_ms}ms`;
     avgChars.value = String(data.avg_char_count);
 
-    const labels = data.recent.map((r) => r.filename);
+    const fullLabels = data.recent.map((r) => r.filename);
+    const labels = fullLabels.map((name) =>
+      name.length > 7 ? name.slice(0, 7) + "..." : name,
+    );
     const charCounts = data.recent.map((r) => r.char_count);
     const processingTimes = data.recent.map((r) => r.processing_time_ms);
 
@@ -61,6 +64,11 @@ async function refresh() {
             color: "#ffffff",
             font: { size: 13, weight: 600 },
             padding: { bottom: 12 },
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) => fullLabels[items[0].dataIndex],
+            },
           },
         },
         scales: {
@@ -94,6 +102,11 @@ async function refresh() {
             color: "#ffffff",
             font: { size: 13, weight: 600 },
             padding: { bottom: 12 },
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) => fullLabels[items[0].dataIndex],
+            },
           },
         },
         scales: {
