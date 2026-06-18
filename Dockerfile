@@ -1,10 +1,13 @@
 FROM python:3.11-slim
 
-# Tesseract must be installed at the OS level inside the container.
+# Tesseract, OpenCV system deps, and Node.js (for tsc + biome at build time).
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libgl1 \
     libglib2.0-0 \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
