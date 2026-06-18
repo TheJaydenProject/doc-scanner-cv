@@ -181,7 +181,13 @@ textarea:focus {
   gap: 16px;
 }
 
+/* min-width: 0 prevents grid items from overflowing their 1fr column. */
+#charts-row > * {
+  min-width: 0;
+}
+
 canvas {
+  width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 4px;
