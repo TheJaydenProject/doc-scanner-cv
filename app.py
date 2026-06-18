@@ -18,6 +18,10 @@ def create_app() -> Flask:
     def index():
         return send_from_directory("static", "index.html")
 
+    @app.route("/docs")
+    def docs():
+        return send_from_directory("static", "docs.html")
+
     with app.app_context():
         db.create_all()
 

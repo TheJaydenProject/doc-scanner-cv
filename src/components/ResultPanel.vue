@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
 import type { ScanResult } from "../types";
+import Lightbox from "./Lightbox.vue";
 
 const props = defineProps<{
   result: ScanResult | null;
@@ -8,6 +9,8 @@ const props = defineProps<{
 }>();
 
 const editableText = ref("");
+const lightboxSrc = ref("");
+const lightboxVisible = ref(false);
 
 watch(
   () => props.result,
@@ -23,6 +26,11 @@ const originalSrc = computed(() =>
 function copyText() {
   navigator.clipboard.writeText(editableText.value);
 }
+
+function openLightbox(src: string) {
+  lightboxSrc.value = src;
+  lightboxVisible.value = true;
+}
 </script>
 
 <template>
@@ -31,7 +39,13 @@ function copyText() {
     <div id="image-comparison">
       <figure>
         <figcaption>Original</figcaption>
-        <img :src="originalSrc" alt="Uploaded document" id="original-img" />
+        <img
+          :src="originalSrc"
+          alt="Uploaded document"
+          id="original-img"
+          class="lightbox-trigger"
+          @click="openLightbox(originalSrc)"
+        />
       </figure>
       <figure>
         <figcaption>Scanned (text regions highlighted)</figcaption>
@@ -39,6 +53,8 @@ function copyText() {
           :src="`data:image/png;base64,${result.image_b64}`"
           alt="Processed document"
           id="scanned-img"
+          class="lightbox-trigger"
+          @click="openLightbox(`data:image/png;base64,${result.image_b64}`)"
         />
       </figure>
     </div>
@@ -59,5 +75,7 @@ function copyText() {
     <label for="extracted-text">Extracted Text</label>
     <textarea id="extracted-text" rows="10" spellcheck="false" v-model="editableText"></textarea>
     <button id="copy-btn" @click="copyText">Copy Text</button>
+
+    <Lightbox :src="lightboxSrc" :visible="lightboxVisible" @close="lightboxVisible = false" />
   </section>
 </template>
