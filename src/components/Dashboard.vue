@@ -53,7 +53,16 @@ async function refresh() {
         ],
       },
       options: {
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: "Character Count — Recent Scans",
+            color: "#ffffff",
+            font: { size: 13, weight: "600" },
+            padding: { bottom: 12 },
+          },
+        },
         scales: {
           x: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
           y: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
@@ -77,7 +86,16 @@ async function refresh() {
         ],
       },
       options: {
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: "Processing Time (ms) — Recent Scans",
+            color: "#ffffff",
+            font: { size: 13, weight: "600" },
+            padding: { bottom: 12 },
+          },
+        },
         scales: {
           x: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
           y: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },

@@ -175,8 +175,8 @@ textarea:focus {
 
 #charts-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 24px;
 }
 
 /* min-width: 0 prevents grid items from overflowing their 1fr column. */
