@@ -16,7 +16,12 @@ from models import ScanRecord, db
 from pipeline.classifier import classify_document
 from pipeline.detector import detect_text_regions
 from pipeline.ocr import extract_text
-from pipeline.scanner import ContourNotFoundError, run_pipeline
+from pipeline.scanner import (
+    ContourNotFoundError,
+    binarize_handwritten,
+    binarize_printed,
+    run_pipeline,
+)
 
 documents_bp = Blueprint("documents", __name__)
 
@@ -69,14 +74,20 @@ def _run_scan_job(
         start = time.time()
 
         try:
-            binarized = run_pipeline(image_bytes)
+            clean_image = run_pipeline(image_bytes)
+
+            # Classify before any destructive pixel alteration — the clean,
+            # warped image carries far more signal than a binarized one.
+            doc_type = classify_document(clean_image)
+
+            if doc_type["label"] == "printed":
+                binarized = binarize_printed(clean_image)
+            else:
+                binarized = binarize_handwritten(clean_image)
 
             # Run detector before OCR — annotated image replaces the plain binarized
             # one in the response so the frontend can show bounding boxes.
             annotated, detections = detect_text_regions(binarized)
-
-            # Classifier runs on the binarized image (not annotated — no boxes in input).
-            doc_type = classify_document(binarized)
 
             text = extract_text(binarized)
 

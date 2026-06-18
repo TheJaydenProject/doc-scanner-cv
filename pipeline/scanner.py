@@ -73,6 +73,9 @@ def order_points(pts: np.ndarray) -> np.ndarray:
     return rect
 
 
+INSET_RATIO = 0.025
+
+
 def perspective_transform(image_bytes: bytes, contour: np.ndarray) -> np.ndarray:
     np_array = np.frombuffer(image_bytes, np.uint8)
     image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
@@ -96,12 +99,30 @@ def perspective_transform(image_bytes: bytes, contour: np.ndarray) -> np.ndarray
     ], dtype="float32")
 
     M = cv2.getPerspectiveTransform(rect, dst)
-    return cv2.warpPerspective(image, M, (max_width, max_height))
+    warped = cv2.warpPerspective(image, M, (max_width, max_height))
+
+    # Symmetric inset crop removes the binding/shadow sliver that approxPolyDP
+    # leaves at the contour edge. Cropping post-warp (not shrinking dst pre-warp)
+    # keeps the margin centered on all four sides.
+    dx = int(max_width * INSET_RATIO)
+    dy = int(max_height * INSET_RATIO)
+    if dx > 0 and dy > 0 and (max_width - 2 * dx) > 0 and (max_height - 2 * dy) > 0:
+        warped = warped[dy:max_height - dy, dx:max_width - dx]
+
+    return warped
 
 
-def binarize(warped: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+def binarize_printed(image: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return binary
+
+
+def binarize_handwritten(image: np.ndarray) -> np.ndarray:
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l_channel, _, _ = cv2.split(lab)
+    blurred = cv2.GaussianBlur(l_channel, (5, 5), 0)
     return cv2.adaptiveThreshold(
         blurred, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -112,17 +133,16 @@ def binarize(warped: np.ndarray) -> np.ndarray:
 
 def run_pipeline(image_bytes: bytes) -> np.ndarray:
     """
-    Runs the full scanner pipeline.
-    Returns the binarized image. If no document boundary is detected,
-    falls back to binarizing the full frame without perspective correction.
+    Runs perspective correction only. Returns the clean, unbinarized,
+    warped BGR image (or the raw decoded frame if no document boundary
+    is found). Callers must classify_document() on this result, then
+    pick binarize_printed() or binarize_handwritten() before OCR.
     Raises ContourNotFoundError only if the image bytes cannot be decoded.
     """
     blurred = preprocess(image_bytes)
     try:
         contour = find_document_contour(blurred)
-        warped = perspective_transform(image_bytes, contour)
-        return binarize(warped)
+        return perspective_transform(image_bytes, contour)
     except ContourNotFoundError:
         np_array = np.frombuffer(image_bytes, np.uint8)
-        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
-        return binarize(image)
+        return cv2.imdecode(np_array, cv2.IMREAD_COLOR)

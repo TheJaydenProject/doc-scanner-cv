@@ -1,6 +1,7 @@
-from pipeline.scanner import run_pipeline
+from pipeline.scanner import run_pipeline, binarize_printed, binarize_handwritten
 from pipeline.detector import detect_text_regions
 from pipeline.classifier import classify_document
+from pipeline.ocr import extract_text
 import cv2
 import os
 
@@ -14,16 +15,27 @@ if not os.path.exists(IMAGE_PATH):
 with open(IMAGE_PATH, "rb") as f:
     image_bytes = f.read()
 
-# Phase 1 — scanner
-binarized = run_pipeline(image_bytes)
-cv2.imwrite(os.path.join(OUTPUT_DIR, "output.png"), binarized)
-print(f"Phase 1: {OUTPUT_DIR}/output.png written.")
+# Step 1 — scanner: perspective correction, inset crop, no binarization
+clean_image = run_pipeline(image_bytes)
+cv2.imwrite(os.path.join(OUTPUT_DIR, "output_clean.png"), clean_image)
+print(f"Step 1: {OUTPUT_DIR}/output_clean.png written.")
 
-# Phase 1.5a — detector
+# Step 2 — classifier runs on the clean image, before any binarization
+result = classify_document(clean_image)
+print(f"Step 2: {result['label']} (confidence: {result['confidence']:.2%})")
+
+# Step 3 — branch binarization by predicted type
+if result["label"] == "printed":
+    binarized = binarize_printed(clean_image)
+else:
+    binarized = binarize_handwritten(clean_image)
+cv2.imwrite(os.path.join(OUTPUT_DIR, "output.png"), binarized)
+print(f"Step 3: {OUTPUT_DIR}/output.png written.")
+
+# Step 4 — detector + OCR
 annotated, detections = detect_text_regions(binarized)
 cv2.imwrite(os.path.join(OUTPUT_DIR, "output_annotated.png"), annotated)
-print(f"Phase 1.5a: {len(detections)} text regions detected. {OUTPUT_DIR}/output_annotated.png written.")
+print(f"Step 4: {len(detections)} text regions detected. {OUTPUT_DIR}/output_annotated.png written.")
 
-# Phase 1.5b — classifier
-result = classify_document(binarized)
-print(f"Phase 1.5b: {result['label']} (confidence: {result['confidence']:.2%})")
+text = extract_text(binarized)
+print(f"Step 4: extracted {len(text)} characters.")

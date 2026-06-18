@@ -8,8 +8,8 @@ _CLASS_LABELS = {"printed", "handwritten", "mixed"}
 
 
 def test_detect_text_regions_returns_annotated_and_list(document_image_bytes):
-    from pipeline.scanner import run_pipeline
-    binarized = run_pipeline(document_image_bytes)
+    from pipeline.scanner import run_pipeline, binarize_printed
+    binarized = binarize_printed(run_pipeline(document_image_bytes))
     annotated, detections = detect_text_regions(binarized)
 
     # annotated must be a 3-channel image (BGR for display).

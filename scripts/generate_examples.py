@@ -4,7 +4,13 @@ import cv2
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from pipeline.scanner import run_pipeline, ContourNotFoundError
+from pipeline.scanner import (
+    run_pipeline,
+    binarize_printed,
+    binarize_handwritten,
+    ContourNotFoundError,
+)
+from pipeline.classifier import classify_document
 
 EXAMPLES_DIR = "static/examples"
 
@@ -20,9 +26,14 @@ while True:
         image_bytes = f.read()
 
     try:
-        result = run_pipeline(image_bytes)
+        clean_image = run_pipeline(image_bytes)
+        doc_type = classify_document(clean_image)
+        if doc_type["label"] == "printed":
+            result = binarize_printed(clean_image)
+        else:
+            result = binarize_handwritten(clean_image)
         cv2.imwrite(output_path, result)
-        print(f"OK: {input_path} -> {output_path}")
+        print(f"OK: {input_path} -> {output_path} ({doc_type['label']})")
     except ContourNotFoundError as e:
         print(f"FAIL: {input_path} — {e}")
 
