@@ -34,7 +34,7 @@ async function refresh() {
 
     const fullLabels = data.recent.map((r) => r.filename);
     const labels = fullLabels.map((name) =>
-      name.length > 7 ? name.slice(0, 7) + "..." : name,
+      name.length > 10 ? name.slice(0, 10) + "..." : name,
     );
     const charCounts = data.recent.map((r) => r.char_count);
     const processingTimes = data.recent.map((r) => r.processing_time_ms);
