@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doc Scanner CV</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Doc Scanner CV</h1>
+  </header>
+
+  <main>
+    <section class="panel" id="upload-panel">
+      <label for="file-input" class="file-label">
+        Choose image (JPEG or PNG, max 2MB)
+      </label>
+      <input type="file" id="file-input" accept="image/jpeg,image/png" />
+      <button id="scan-btn" disabled>Scan Document</button>
+      <p id="loading" hidden>Processing...</p>
+      <p id="error-msg" class="error" hidden></p>
+    </section>
+
+    <section class="panel" id="results-panel" hidden>
+      <h2>Result</h2>
+      <div id="image-comparison">
+        <figure>
+          <figcaption>Original</figcaption>
+          <img id="original-img" alt="Uploaded document" />
+        </figure>
+        <figure>
+          <figcaption>Scanned (text regions highlighted)</figcaption>
+          <img id="scanned-img" alt="Processed document" />
+        </figure>
+      </div>
+      <div id="scan-meta-row">
+        <div class="stat-card">
+          <span class="stat-label">Text Regions Detected</span>
+          <span class="stat-value" id="detection-count">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Document Type</span>
+          <span class="stat-value" id="doc-type">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Classifier Confidence</span>
+          <span class="stat-value" id="doc-type-confidence">—</span>
+        </div>
+      </div>
+      <label for="extracted-text">Extracted Text</label>
+      <textarea id="extracted-text" rows="10" spellcheck="false"></textarea>
+      <button id="copy-btn">Copy Text</button>
+    </section>
+
+    <section class="panel" id="dashboard">
+      <h2>Scan History</h2>
+      <div id="stats-row">
+        <div class="stat-card">
+          <span class="stat-label">Total Scans</span>
+          <span class="stat-value" id="total-scans">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Processing Time</span>
+          <span class="stat-value" id="avg-time">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Characters</span>
+          <span class="stat-value" id="avg-chars">—</span>
+        </div>
+      </div>
+      <div id="charts-row">
+        <canvas id="char-count-chart"></canvas>
+        <canvas id="processing-time-chart"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
