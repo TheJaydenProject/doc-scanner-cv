@@ -1,5 +1,5 @@
 import atexit
-from flask import Flask
+from flask import Flask, send_from_directory
 from models import db
 from api.documents import documents_bp, executor, limiter
 
@@ -13,6 +13,10 @@ def create_app() -> Flask:
     db.init_app(app)
     limiter.init_app(app)
     app.register_blueprint(documents_bp, url_prefix="/api/documents")
+
+    @app.route("/")
+    def index():
+        return send_from_directory("static", "index.html")
 
     with app.app_context():
         db.create_all()
