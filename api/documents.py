@@ -85,14 +85,18 @@ def _run_scan_job(
             else:
                 binarized = binarize_handwritten(clean_image)
 
-            # Run detector before OCR — annotated image replaces the plain binarized
-            # one in the response so the frontend can show bounding boxes.
-            annotated, detections = detect_text_regions(binarized)
+            # detections are returned as raw coordinates so the frontend can draw
+            # its own interactive overlay; the burned-in annotated image is unused.
+            _, detections = detect_text_regions(binarized)
 
             text = extract_text(binarized)
 
-            _, buffer = cv2.imencode(".png", annotated)
-            image_b64 = base64.b64encode(buffer).decode("utf-8")
+            def encode_png(image) -> str:
+                _, buffer = cv2.imencode(".png", image)
+                return base64.b64encode(buffer).decode("utf-8")
+
+            warped_image_b64 = encode_png(clean_image)
+            binarized_image_b64 = encode_png(binarized)
 
             elapsed_ms = int((time.time() - start) * 1000)
 
@@ -112,7 +116,9 @@ def _run_scan_job(
                     "char_count": len(text),
                     "word_count": len(text.split()),
                     "processing_time_ms": elapsed_ms,
-                    "image_b64": image_b64,
+                    "warped_image_b64": warped_image_b64,
+                    "binarized_image_b64": binarized_image_b64,
+                    "detections": detections,
                     "detection_count": len(detections),
                     "doc_type": doc_type["label"],
                     "doc_type_confidence": doc_type["confidence"],

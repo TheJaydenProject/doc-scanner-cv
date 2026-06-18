@@ -3,6 +3,15 @@ import { ref, watch, computed } from "vue";
 import type { ScanResult } from "../types";
 import Lightbox from "./Lightbox.vue";
 
+type StageKey = "raw" | "warped" | "binarized" | "detected";
+
+const STAGES: { key: StageKey; label: string }[] = [
+  { key: "raw", label: "Raw" },
+  { key: "warped", label: "Warped" },
+  { key: "binarized", label: "Binarized" },
+  { key: "detected", label: "Detected" },
+];
+
 const props = defineProps<{
   result: ScanResult | null;
   file: File | null;
@@ -11,17 +20,60 @@ const props = defineProps<{
 const editableText = ref("");
 const lightboxSrc = ref("");
 const lightboxVisible = ref(false);
+const activeStage = ref<StageKey>("detected");
+const hoveredBox = ref<number | null>(null);
+const naturalWidth = ref(0);
+const naturalHeight = ref(0);
 
 watch(
   () => props.result,
   (newResult) => {
     editableText.value = newResult?.text ?? "";
+    activeStage.value = "detected";
+    hoveredBox.value = null;
+    naturalWidth.value = 0;
+    naturalHeight.value = 0;
   },
 );
 
 const originalSrc = computed(() =>
   props.file ? URL.createObjectURL(props.file) : "",
 );
+
+function stageSrc(key: StageKey): string {
+  if (!props.result) return "";
+  switch (key) {
+    case "raw":
+      return originalSrc.value;
+    case "warped":
+      return `data:image/png;base64,${props.result.warped_image_b64}`;
+    case "binarized":
+    case "detected":
+      return `data:image/png;base64,${props.result.binarized_image_b64}`;
+  }
+}
+
+function stageCaption(key: StageKey): string {
+  if (!props.result) return "";
+  switch (key) {
+    case "raw":
+      return "As uploaded, before any processing.";
+    case "warped":
+      return "Perspective-corrected and cropped to the document boundary.";
+    case "binarized":
+      return `Thresholded using the "${props.result.doc_type}" branch.`;
+    case "detected": {
+      const n = props.result.detection_count;
+      return `${n} MSER text region${n === 1 ? "" : "s"} — hover a box to inspect it.`;
+    }
+  }
+}
+
+function onStageImageLoad(event: Event) {
+  const img = event.target as HTMLImageElement;
+  naturalWidth.value = img.naturalWidth;
+  naturalHeight.value = img.naturalHeight;
+}
 
 function copyText() {
   navigator.clipboard.writeText(editableText.value);
@@ -37,28 +89,53 @@ function openLightbox(src: string) {
   <section class="panel" id="results-panel">
     <h2>Result</h2>
     <template v-if="result">
-      <div id="image-comparison">
-        <figure>
-          <figcaption>Original</figcaption>
-          <img
-            :src="originalSrc"
-            alt="Uploaded document"
-            id="original-img"
-            class="lightbox-trigger"
-            @click="openLightbox(originalSrc)"
-          />
-        </figure>
-        <figure>
-          <figcaption>Scanned (text regions highlighted)</figcaption>
-          <img
-            :src="`data:image/png;base64,${result.image_b64}`"
-            alt="Processed document"
-            id="scanned-img"
-            class="lightbox-trigger"
-            @click="openLightbox(`data:image/png;base64,${result.image_b64}`)"
-          />
-        </figure>
+      <div class="stage-tabs" role="tablist">
+        <button
+          v-for="(stage, i) in STAGES"
+          :key="stage.key"
+          type="button"
+          class="stage-tab"
+          :class="{ active: activeStage === stage.key }"
+          role="tab"
+          :aria-selected="activeStage === stage.key"
+          @click="activeStage = stage.key"
+        >
+          <span class="stage-index">{{ i + 1 }}</span>
+          {{ stage.label }}
+        </button>
       </div>
+
+      <figure id="stage-viewer">
+        <div class="frame stage-frame">
+          <img
+            :src="stageSrc(activeStage)"
+            :alt="`${activeStage} stage`"
+            class="lightbox-trigger"
+            @click="openLightbox(stageSrc(activeStage))"
+            @load="onStageImageLoad"
+          />
+          <svg
+            v-if="activeStage === 'detected' && naturalWidth && naturalHeight"
+            class="detection-overlay"
+            :viewBox="`0 0 ${naturalWidth} ${naturalHeight}`"
+            preserveAspectRatio="none"
+          >
+            <rect
+              v-for="(box, i) in result.detections"
+              :key="i"
+              :x="box[0]"
+              :y="box[1]"
+              :width="box[2]"
+              :height="box[3]"
+              :class="{ hovered: hoveredBox === i }"
+              @mouseenter="hoveredBox = i"
+              @mouseleave="hoveredBox = null"
+            />
+          </svg>
+        </div>
+        <figcaption>{{ stageCaption(activeStage) }}</figcaption>
+      </figure>
+
       <div id="scan-meta-row">
         <div class="stat-card">
           <span class="stat-label">Text Regions Detected</span>

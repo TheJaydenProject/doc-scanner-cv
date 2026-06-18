@@ -235,12 +235,115 @@ button:focus-visible,
   outline-offset: 2px;
 }
 
-#image-comparison {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Pipeline stage trace */
+.stage-tabs {
+  display: flex;
   gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.stage-tab {
+  position: relative;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  padding: var(--space-2) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stage-tab:hover {
+  color: var(--ink-secondary);
+}
+
+.stage-tab.active {
+  color: var(--ink);
+}
+
+.stage-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 2px;
+  background: var(--scan);
+  border-radius: 2px;
+}
+
+.stage-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.stage-tab.active .stage-index {
+  border-color: var(--scan);
+  color: var(--scan);
+}
+
+#stage-viewer {
   flex: 0 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+#stage-viewer figcaption {
+  text-align: center;
+}
+
+.stage-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.stage-frame img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 42vh;
+  background: var(--inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.detection-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.detection-overlay rect {
+  fill: rgba(74, 214, 200, 0.12);
+  stroke: var(--scan);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.detection-overlay rect.hovered {
+  fill: rgba(74, 214, 200, 0.32);
+  stroke: var(--scan-strong);
+  stroke-width: 2.5;
 }
 
 figure {

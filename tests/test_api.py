@@ -117,7 +117,9 @@ def test_async_job_resolves_complete_on_valid_image(client, document_image_bytes
             assert "text" in result
             assert "char_count" in result
             assert "processing_time_ms" in result
-            assert "image_b64" in result
+            assert "warped_image_b64" in result
+            assert "binarized_image_b64" in result
+            assert "detections" in result
             assert result["processing_time_ms"] >= 0
             return
         time.sleep(0.5)

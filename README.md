@@ -41,7 +41,7 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
       |
   [SQLite]          ScanRecord (char_count, word_count, processing_time_ms)
       |
-  [Response]        job_id -> poll -> { text, image_b64, doc_type, ... }
+  [Response]        job_id -> poll -> { text, warped_image_b64, binarized_image_b64, detections, doc_type, ... }
 
 Flask API           Flask + Gunicorn (1 worker, 3 concurrent scan threads)
 Frontend            Vue 3 SPA (ScanPanel, ResultPanel, Dashboard with Chart.js)
@@ -225,7 +225,9 @@ Successful result shape:
     "char_count": 1042,
     "word_count": 183,
     "processing_time_ms": 312,
-    "image_b64": "<base64-encoded PNG with MSER bounding boxes>",
+    "warped_image_b64": "<base64-encoded PNG, perspective-corrected>",
+    "binarized_image_b64": "<base64-encoded PNG, thresholded>",
+    "detections": [[12, 34, 18, 9]],
     "detection_count": 47,
     "doc_type": "printed",
     "doc_type_confidence": 0.9871

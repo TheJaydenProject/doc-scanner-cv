@@ -3,7 +3,9 @@ export interface ScanResult {
   char_count: number;
   word_count: number;
   processing_time_ms: number;
-  image_b64: string;
+  warped_image_b64: string;
+  binarized_image_b64: string;
+  detections: [number, number, number, number][];
   detection_count: number;
   doc_type: string;
   doc_type_confidence: number;
