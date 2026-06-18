@@ -6,15 +6,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pipeline.scanner import run_pipeline, ContourNotFoundError
 
-EXAMPLES = [
-    ("static/examples/note1_original.jpg", "static/examples/note1_scanned.png"),
-    ("static/examples/note2_original.jpg", "static/examples/note2_scanned.png"),
-]
+EXAMPLES_DIR = "static/examples"
 
-for input_path, output_path in EXAMPLES:
+n = 1
+while True:
+    input_path = os.path.join(EXAMPLES_DIR, f"note{n}_original.jpg")
     if not os.path.exists(input_path):
-        print(f"SKIP: {input_path} not found")
-        continue
+        break
+
+    output_path = os.path.join(EXAMPLES_DIR, f"note{n}_scanned.png")
 
     with open(input_path, "rb") as f:
         image_bytes = f.read()
@@ -25,3 +25,8 @@ for input_path, output_path in EXAMPLES:
         print(f"OK: {input_path} -> {output_path}")
     except ContourNotFoundError as e:
         print(f"FAIL: {input_path} — {e}")
+
+    n += 1
+
+if n == 1:
+    print(f"No files found. Drop note1_original.jpg into {EXAMPLES_DIR}/ and retry.")
