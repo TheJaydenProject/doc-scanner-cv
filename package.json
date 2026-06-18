@@ -2,14 +2,21 @@
   "name": "doc-scanner-cv",
   "private": true,
   "scripts": {
-    "build": "tsc",
-    "check": "biome check static/app.ts",
-    "format": "biome format --write static/app.ts",
-    "lint": "biome lint static/app.ts"
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "check": "biome check src/",
+    "format": "biome format --write src/",
+    "lint": "biome lint src/"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "vue": "^3.4.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
-    "chart.js": "^4.5.1",
-    "typescript": "^5.4.0"
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.0.0"
   }
 }

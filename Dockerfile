@@ -20,8 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # npm ci installs exact versions from package-lock.json (no network surprises).
-# biome check runs lint + format validation and fails the build if app.ts has violations.
-# tsc compiles app.ts to app.js. All three must pass before the container starts serving.
+# biome check runs lint + format validation; vue-tsc type-checks .vue files; vite build
+# bundles the Vue SPA into static/. All three must pass before the container starts serving.
 RUN npm ci && npm run check && npm run build
 
 EXPOSE 5000

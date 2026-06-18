@@ -58,8 +58,9 @@ instance/
 # Generated pipeline output
 output/
 
-# Built frontend assets
-static/app.js
+# Built frontend assets (Vite output)
+static/index.html
+static/assets/
 static/examples/
 
 # Generic Build and Dependency Directories

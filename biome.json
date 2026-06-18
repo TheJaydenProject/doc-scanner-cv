@@ -23,6 +23,6 @@
     }
   },
   "files": {
-    "include": ["static/app.ts"]
+    "include": ["src/**/*.ts", "vite.config.ts"]
   }
 }
