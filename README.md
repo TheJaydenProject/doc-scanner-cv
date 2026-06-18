@@ -276,7 +276,7 @@ Three test modules cover API contract, scanner logic, and the detector/classifie
 | Module | What it tests |
 |--------|---------------|
 | `test_api.py` | Missing file, wrong MIME type, empty file, 202 shape with job_id, job not found, history list shape, metrics keys, async job resolves to `failed` on a blank image, async job resolves to `complete` with correct result keys on a synthetic document image |
-| `test_pipeline.py` | `ContourNotFoundError` raised on a blank image; `binarize` returns a single-channel array containing only 0 and 255 |
+| `test_pipeline.py` | `ContourNotFoundError` raised on corrupt image bytes; blank image (no contour) falls back to the raw, unbinarized BGR frame; `binarize_printed` and `binarize_handwritten` each return a single-channel array containing only 0 and 255 |
 | `test_detector.py` | `detect_text_regions` return types and shapes; noise bounding boxes filtered; `classify_document` returns a valid label string; BGR input handled correctly by classifier preprocessing |
 
 Run the suite:
@@ -290,16 +290,17 @@ pytest tests/ -v
 ## Roadmap
 
 - [x] 3-pass document contour detection with convex hull and minAreaRect fallbacks
-- [x] Perspective transform and adaptive binarization
+- [x] Perspective transform with inset crop, early document classification, and type-branched binarization (Otsu for printed, LAB-channel adaptive threshold for handwritten/mixed)
 - [x] MSER text region detection with bounding box annotation
 - [x] ONNX document classifier (printed / handwritten / mixed)
 - [x] Async scan jobs with in-memory job store (200-job LRU eviction)
 - [x] Rate limiting (20/hour per IP, 1 concurrent per IP, 3 concurrent global)
 - [x] SQLite persistence with scan history and aggregate metrics
 - [x] Vue 3 SPA with Chart.js dashboard
-- [x] Docker + Cloudflare Tunnel deployment
-- [ ] Examples gallery with before/after image pairs
-- [ ] Static API documentation page
+- [x] Docker + Cloudflare Tunnel configuration
+- [x] Examples gallery with before/after image pairs
+- [x] Static API documentation page
+- [ ] Live VPS deployment
 - [ ] GitHub Actions CI
 
 ---
