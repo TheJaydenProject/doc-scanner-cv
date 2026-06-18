@@ -7,7 +7,11 @@ import os
 OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-with open("test_images/sample_note1.jpg", "rb") as f:
+IMAGE_PATH = "static/examples/note1_original.jpg"
+if not os.path.exists(IMAGE_PATH):
+    raise SystemExit(f"SKIP: {IMAGE_PATH} not found — drop a photo there first.")
+
+with open(IMAGE_PATH, "rb") as f:
     image_bytes = f.read()
 
 # Phase 1 — scanner
