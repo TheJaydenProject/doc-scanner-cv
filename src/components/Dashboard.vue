@@ -50,20 +50,21 @@ async function refresh() {
           {
             label: "Character Count",
             data: charCounts,
-            backgroundColor: "#2563eb",
+            backgroundColor: "#4ad6c8",
             borderRadius: 2,
           },
         ],
       },
       options: {
+        maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           title: {
             display: true,
             text: "Character Count — Recent Scans",
-            color: "#ffffff",
-            font: { size: 13, weight: 600 },
-            padding: { bottom: 12 },
+            color: "#f2f4f6",
+            font: { size: 12, weight: 600 },
+            padding: { bottom: 10 },
           },
           tooltip: {
             callbacks: {
@@ -72,8 +73,8 @@ async function refresh() {
           },
         },
         scales: {
-          x: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
-          y: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
+          x: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
+          y: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
         },
       },
     });
@@ -86,7 +87,7 @@ async function refresh() {
           {
             label: "Processing Time (ms)",
             data: processingTimes,
-            borderColor: "#2563eb",
+            borderColor: "#4ad6c8",
             backgroundColor: "transparent",
             tension: 0,
             pointRadius: 3,
@@ -94,14 +95,15 @@ async function refresh() {
         ],
       },
       options: {
+        maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           title: {
             display: true,
             text: "Processing Time (ms) — Recent Scans",
-            color: "#ffffff",
-            font: { size: 13, weight: 600 },
-            padding: { bottom: 12 },
+            color: "#f2f4f6",
+            font: { size: 12, weight: 600 },
+            padding: { bottom: 10 },
           },
           tooltip: {
             callbacks: {
@@ -110,8 +112,8 @@ async function refresh() {
           },
         },
         scales: {
-          x: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
-          y: { ticks: { color: "#888888" }, grid: { color: "#2a2a2a" } },
+          x: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
+          y: { ticks: { color: "#6b7480" }, grid: { color: "#23282f" } },
         },
       },
     });
@@ -144,8 +146,8 @@ onMounted(refresh);
       </div>
     </div>
     <div id="charts-row">
-      <div><canvas ref="charCountCanvas"></canvas></div>
-      <div><canvas ref="processingTimeCanvas"></canvas></div>
+      <div class="chart-box"><canvas ref="charCountCanvas"></canvas></div>
+      <div class="chart-box"><canvas ref="processingTimeCanvas"></canvas></div>
     </div>
   </section>
 </template>

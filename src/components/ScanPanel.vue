@@ -98,7 +98,8 @@ function showError(message: string) {
 </script>
 
 <template>
-  <section class="panel" id="upload-panel">
+  <section class="panel">
+    <h2>Upload</h2>
     <label for="file-input">Choose image (JPEG or PNG, max 2MB)</label>
 
     <input
@@ -115,7 +116,12 @@ function showError(message: string) {
     </button>
 
     <button :disabled="scanDisabled" @click="onScan">Scan Document</button>
-    <p v-if="loading" id="loading">Processing...</p>
+    <div v-if="loading" class="scan-progress" id="loading" role="status" aria-live="polite">
+      <span>Processing…</span>
+      <div class="sweep-track">
+        <div class="sweep-bar"></div>
+      </div>
+    </div>
     <p v-if="error" class="error" id="error-msg">{{ error }}</p>
   </section>
 </template>

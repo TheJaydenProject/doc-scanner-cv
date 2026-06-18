@@ -12,7 +12,7 @@ function openLightbox(src: string) {
 </script>
 
 <template>
-  <section class="panel" id="examples">
+  <section class="panel">
     <h2>Examples</h2>
     <p class="section-desc">Real scans of handwritten notes processed through the pipeline.</p>
 
