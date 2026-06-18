@@ -200,7 +200,7 @@ Accepts `multipart/form-data`. Queues a background scan job and returns immediat
 |--------|------|-------------|
 | 202 | `{"job_id": "<uuid>"}` | Job accepted |
 | 400 | `{"error": "..."}` | Missing file, wrong MIME type, or empty file |
-| 429 | `{"error": "..."}` | 5/hour per-IP limit exceeded, duplicate in-flight scan from same IP, or global 3-concurrent cap reached |
+| 429 | `{"error": "..."}` | 20/hour per-IP limit exceeded, duplicate in-flight scan from same IP, or global 3-concurrent cap reached |
 
 ---
 
@@ -294,7 +294,7 @@ pytest tests/ -v
 - [x] MSER text region detection with bounding box annotation
 - [x] ONNX document classifier (printed / handwritten / mixed)
 - [x] Async scan jobs with in-memory job store (200-job LRU eviction)
-- [x] Rate limiting (5/hour per IP, 1 concurrent per IP, 3 concurrent global)
+- [x] Rate limiting (20/hour per IP, 1 concurrent per IP, 3 concurrent global)
 - [x] SQLite persistence with scan history and aggregate metrics
 - [x] Vue 3 SPA with Chart.js dashboard
 - [x] Docker + Cloudflare Tunnel deployment
