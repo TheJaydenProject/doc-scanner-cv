@@ -1,0 +1,320 @@
+# doc-scanner-cv
+
+Computer vision pipeline that detects a document boundary in a photograph, dewraps it with a perspective transform, classifies its type, and extracts text via OCR -- served over a Flask REST API with a Vue 3 frontend.
+
+![Python](https://img.shields.io/badge/python-3.11-blue)
+![Vue](https://img.shields.io/badge/vue-3.4-brightgreen)
+![OpenCV](https://img.shields.io/badge/opencv-4.13.0-orange)
+
+---
+
+## How It Works
+
+1. **Preprocess**: The uploaded image is decoded, converted to grayscale, and smoothed with a 7x7 Gaussian blur to suppress edge noise before contour detection.
+2. **Contour detection**: Three-pass strategy. Pass 1 approximates the top eight contours by area and returns the first clean four-point quad. Pass 2 applies a convex hull to the largest contour and approximates again. Pass 3 computes `minAreaRect` over all Canny edge pixels, covering low-contrast cases where the document boundary never closes into a contour.
+3. **Perspective transform**: Corner points are sorted into `[top-left, top-right, bottom-right, bottom-left]` order using per-point coordinate sums and differences. `getPerspectiveTransform` and `warpPerspective` produce a flat, axis-aligned crop.
+4. **Binarize**: Adaptive Gaussian thresholding (block size 51, C=15) converts the warped image to a two-value mask suited for OCR.
+5. **Text region detection**: MSER runs on the binarized image. Bounding boxes under 100 px² are discarded as noise artifacts. Remaining regions are drawn onto an annotated BGR copy returned to the caller.
+6. **Document classification**: A MobileNetV2 ONNX model (opset 18) classifies the binarized image as `printed`, `handwritten`, or `mixed`. The `InferenceSession` is loaded once per process and reused across all requests to avoid the 100-300ms initialization cost.
+7. **OCR**: pytesseract extracts text from the binarized image. The result, character count, word count, processing time, and annotated image are persisted to SQLite and returned to the client.
+
+---
+
+## Architecture
+
+```
+[Upload] JPEG / PNG (max 2 MB)
+      |
+  [Preprocess]      grayscale -> Gaussian blur (7x7)
+      |
+  [Contour]         Canny -> morphological close -> 3-pass quad extraction
+      |
+  [Perspective]     4-point warp -> axis-aligned document crop
+      |
+  [Binarize]        adaptive Gaussian threshold (block=51, C=15)
+      |
+  [MSER Detector]   text region bounding boxes + annotated BGR image
+      |
+  [Classifier]      MobileNetV2 ONNX -> printed | handwritten | mixed
+      |
+  [OCR]             pytesseract -> extracted text
+      |
+  [SQLite]          ScanRecord (char_count, word_count, processing_time_ms)
+      |
+  [Response]        job_id -> poll -> { text, image_b64, doc_type, ... }
+
+Flask API           Flask + Gunicorn (1 worker, 3 concurrent scan threads)
+Frontend            Vue 3 SPA (ScanPanel, ResultPanel, Dashboard with Chart.js)
+Deployment          Docker + docker-compose + Cloudflare Tunnel
+```
+
+---
+
+## Built With
+
+| Component | Library | Version |
+|-----------|---------|---------|
+| Language | Python | 3.11 |
+| Web framework | Flask | 3.1.3 |
+| ORM | Flask-SQLAlchemy | 3.1.1 |
+| Rate limiting | Flask-Limiter | 4.1.1 |
+| Computer vision | OpenCV | 4.13.0 |
+| ONNX inference | onnxruntime | 1.24.4 |
+| OCR | pytesseract + Tesseract | 0.3.13 |
+| Image processing | Pillow | 12.1.1 |
+| WSGI server | Gunicorn | 26.0.0 |
+| Numerical | NumPy | 2.4.4 |
+| Frontend | Vue 3 | 3.4.x |
+| Charts | Chart.js | 4.5.x |
+| Build tool | Vite | 5.0.x |
+| Linter / formatter | Biome | 1.9.x |
+| Test framework | pytest | 9.1.0 |
+
+---
+
+## Prerequisites
+
+- Python 3.11 or later
+- Node.js 20 or later and npm
+- Tesseract OCR (not required when running via Docker)
+- Docker and Docker Compose (for containerized deployment)
+
+```bash
+python --version     # must be 3.11+
+node --version       # must be 20+
+tesseract --version
+docker --version
+```
+
+Install Tesseract system dependencies:
+
+```bash
+# Ubuntu / Debian
+sudo apt-get install tesseract-ocr libgl1 libglib2.0-0
+
+# macOS
+brew install tesseract
+```
+
+---
+
+## Installation
+
+1. Clone the repository.
+
+```bash
+git clone https://github.com/TheJaydenProject/doc-scanner-cv.git
+cd doc-scanner-cv
+```
+
+2. Create and activate a virtual environment.
+
+```bash
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+```
+
+3. Install Python dependencies.
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Install Node dependencies and build the Vue frontend.
+
+```bash
+npm ci
+npm run build
+```
+
+5. Start the development server.
+
+```bash
+python app.py
+```
+
+The application is available at `http://localhost:5000`.
+
+**Docker (production)**
+
+```bash
+docker compose up --build
+```
+
+The image runs `vue-tsc`, `biome check`, and `vite build` during the Docker build step. All three must pass before the container starts serving. For the Cloudflare Tunnel to connect, set `CLOUDFLARE_TUNNEL_TOKEN` in the host environment before starting.
+
+```bash
+export CLOUDFLARE_TUNNEL_TOKEN=your_token_here
+docker compose up -d
+```
+
+---
+
+## Usage
+
+Open `http://localhost:5000`, select a JPEG or PNG photograph of a document, and click Scan. The scan runs asynchronously; the UI polls for completion and displays the annotated result image, extracted text, document type classification (printed / handwritten / mixed), and per-scan metrics.
+
+To call the API directly:
+
+```bash
+# Submit a scan
+curl -X POST http://localhost:5000/api/documents/scan \
+  -F "file=@document.jpg"
+# {"job_id": "3f2a1b..."}
+
+# Poll until complete
+curl http://localhost:5000/api/documents/jobs/3f2a1b...
+# {"status": "complete", "result": {...}}
+```
+
+---
+
+## Configuration
+
+| Variable | Type | Required | Description |
+|----------|------|----------|-------------|
+| `CLOUDFLARE_TUNNEL_TOKEN` | string | Production only | Authenticates the `cloudflared` container. Set in the host environment before `docker compose up`. |
+
+All other settings (SQLite path, rate limits, max upload size, thread pool size) are hardcoded in `app.py` and `api/documents.py`. The database file is written to `instance/scans.db` and mounted to `./data/` in Docker so it persists across container restarts.
+
+---
+
+## API Reference
+
+All endpoints are prefixed with `/api/documents`.
+
+### POST /scan
+
+Accepts `multipart/form-data`. Queues a background scan job and returns immediately.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file | Yes | JPEG or PNG, max 2 MB |
+
+| Status | Body | Description |
+|--------|------|-------------|
+| 202 | `{"job_id": "<uuid>"}` | Job accepted |
+| 400 | `{"error": "..."}` | Missing file, wrong MIME type, or empty file |
+| 429 | `{"error": "..."}` | 5/hour per-IP limit exceeded, duplicate in-flight scan from same IP, or global 3-concurrent cap reached |
+
+---
+
+### GET /jobs/:job_id
+
+Poll for job status.
+
+| Status | Body | Description |
+|--------|------|-------------|
+| 200 | `{"status": "processing"}` | Still running |
+| 200 | `{"status": "complete", "result": {...}}` | Finished successfully |
+| 200 | `{"status": "failed", "error": "..."}` | Pipeline error (e.g. no document contour found) |
+| 404 | `{"error": "Job not found."}` | Unknown job ID |
+
+Successful result shape:
+
+```json
+{
+  "status": "complete",
+  "result": {
+    "text": "extracted text content",
+    "char_count": 1042,
+    "word_count": 183,
+    "processing_time_ms": 312,
+    "image_b64": "<base64-encoded PNG with MSER bounding boxes>",
+    "detection_count": 47,
+    "doc_type": "printed",
+    "doc_type_confidence": 0.9871
+  }
+}
+```
+
+---
+
+### GET /history
+
+Returns the 50 most recent scan records ordered by `created_at` descending.
+
+```json
+[
+  {
+    "id": 14,
+    "filename": "invoice.jpg",
+    "char_count": 1042,
+    "word_count": 183,
+    "processing_time_ms": 312,
+    "created_at": "2026-06-18T14:23:01.000000"
+  }
+]
+```
+
+---
+
+### GET /metrics
+
+Returns aggregate statistics and the 10 most recent records.
+
+```json
+{
+  "total_scans": 42,
+  "avg_processing_time_ms": 287,
+  "avg_char_count": 894,
+  "recent": [...]
+}
+```
+
+---
+
+## Tests
+
+Three test modules cover API contract, scanner logic, and the detector/classifier.
+
+| Module | What it tests |
+|--------|---------------|
+| `test_api.py` | Missing file, wrong MIME type, empty file, 202 shape with job_id, job not found, history list shape, metrics keys, async job resolves to `failed` on a blank image, async job resolves to `complete` with correct result keys on a synthetic document image |
+| `test_pipeline.py` | `ContourNotFoundError` raised on a blank image; `binarize` returns a single-channel array containing only 0 and 255 |
+| `test_detector.py` | `detect_text_regions` return types and shapes; noise bounding boxes filtered; `classify_document` returns a valid label string; BGR input handled correctly by classifier preprocessing |
+
+Run the suite:
+
+```bash
+pytest tests/ -v
+```
+
+---
+
+## Roadmap
+
+- [x] 3-pass document contour detection with convex hull and minAreaRect fallbacks
+- [x] Perspective transform and adaptive binarization
+- [x] MSER text region detection with bounding box annotation
+- [x] ONNX document classifier (printed / handwritten / mixed)
+- [x] Async scan jobs with in-memory job store (200-job LRU eviction)
+- [x] Rate limiting (5/hour per IP, 1 concurrent per IP, 3 concurrent global)
+- [x] SQLite persistence with scan history and aggregate metrics
+- [x] Vue 3 SPA with Chart.js dashboard
+- [x] Docker + Cloudflare Tunnel deployment
+- [ ] Examples gallery with before/after image pairs
+- [ ] Static API documentation page
+- [ ] GitHub Actions CI
+
+---
+
+## Contributing
+
+1. Fork the repository and create a branch: `git checkout -b feature/your-feature-name`
+2. Make your changes and verify the test suite passes: `pytest tests/ -v`
+3. Verify the frontend builds cleanly: `npm run build`
+4. Open a pull request against `main` with a description of what changed and why.
+
+Bug reports and feature requests go in [GitHub Issues](https://github.com/TheJaydenProject/doc-scanner-cv/issues).
+
+---
+
+## Contact
+
+[github.com/TheJaydenProject](https://github.com/TheJaydenProject)
