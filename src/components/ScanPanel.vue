@@ -10,13 +10,20 @@ const emit = defineEmits<{
 }>();
 
 const fileInput = ref<HTMLInputElement | null>(null);
+const selectedFileName = ref("");
 const loading = ref(false);
 const error = ref("");
 const scanDisabled = ref(true);
 
-function onFileChange() {
-  const files = fileInput.value?.files;
-  scanDisabled.value = !files || files.length === 0;
+function onFileChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    selectedFileName.value = target.files[0].name;
+    scanDisabled.value = false;
+  } else {
+    selectedFileName.value = "";
+    scanDisabled.value = true;
+  }
 }
 
 async function onScan() {
@@ -33,7 +40,10 @@ async function onScan() {
   let jobId: string;
 
   try {
-    const res = await fetch("/api/documents/scan", { method: "POST", body: formData });
+    const res = await fetch("/api/documents/scan", {
+      method: "POST",
+      body: formData,
+    });
     const data = await res.json();
     if (!res.ok) {
       showError(data.error ?? "Upload failed.");
@@ -90,13 +100,20 @@ function showError(message: string) {
 <template>
   <section class="panel" id="upload-panel">
     <label for="file-input">Choose image (JPEG or PNG, max 2MB)</label>
+
     <input
       ref="fileInput"
       type="file"
       id="file-input"
+      class="sr-only"
       accept="image/jpeg,image/png"
       @change="onFileChange"
     />
+
+    <button type="button" class="file-pick-btn" @click="fileInput?.click()">
+      {{ selectedFileName || "Choose File" }}
+    </button>
+
     <button :disabled="scanDisabled" @click="onScan">Scan Document</button>
     <p v-if="loading" id="loading">Processing...</p>
     <p v-if="error" class="error" id="error-msg">{{ error }}</p>

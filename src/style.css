@@ -1,4 +1,6 @@
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -285,4 +287,32 @@ nav a:hover {
 
 #lightbox-close:hover {
   background: var(--surface);
+}
+
+/* Visually hidden but accessible file input */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* Custom file-picker button — secondary style */
+.file-pick-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-pick-btn:hover:not(:disabled) {
+  background: var(--surface);
+  opacity: 1;
 }
