@@ -4,9 +4,16 @@ import pytest
 from pipeline.scanner import run_pipeline, binarize, ContourNotFoundError
 
 
-def test_blank_image_raises_contour_error(blank_image_bytes):
+def test_blank_image_returns_binarized_fallback(blank_image_bytes):
+    # No contour found — pipeline falls back to full-frame binarization.
+    result = run_pipeline(blank_image_bytes)
+    assert len(result.shape) == 2
+    assert set(np.unique(result)).issubset({0, 255})
+
+
+def test_corrupt_bytes_raises_contour_error():
     with pytest.raises(ContourNotFoundError):
-        run_pipeline(blank_image_bytes)
+        run_pipeline(b"not an image")
 
 
 def test_binarize_output_is_single_channel():

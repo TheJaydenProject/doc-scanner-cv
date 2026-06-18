@@ -47,11 +47,10 @@ def test_metrics_returns_expected_keys(client):
     assert "recent" in data
 
 
-def test_async_job_resolves_failed_on_bad_image(client, blank_image_bytes):
+def test_async_job_completes_with_fallback_on_blank_image(client, blank_image_bytes):
     """
-    Submit a blank image that the pipeline cannot detect a contour in.
-    Poll until the job reaches a terminal state and verify it fails cleanly
-    rather than hanging or returning a 500.
+    Blank image has no detectable contour — pipeline falls back to full-frame
+    binarization and returns a complete job rather than failing.
     """
     data = {"file": (io.BytesIO(blank_image_bytes), "blank.jpg", "image/jpeg")}
     submit_res = client.post("/api/documents/scan", data=data, content_type="multipart/form-data")
@@ -59,8 +58,30 @@ def test_async_job_resolves_failed_on_bad_image(client, blank_image_bytes):
 
     job_id = submit_res.get_json()["job_id"]
 
-    # Poll for up to 10 seconds. The pipeline fails fast on a blank image
-    # so this should resolve in well under 1 second in practice.
+    for _ in range(20):
+        poll_res = client.get(f"/api/documents/jobs/{job_id}")
+        assert poll_res.status_code == 200
+        job = poll_res.get_json()
+        if job["status"] in ("complete", "failed"):
+            assert job["status"] == "complete"
+            assert "result" in job
+            return
+        time.sleep(0.5)
+
+    raise AssertionError("Job did not resolve within 10 seconds.")
+
+
+def test_async_job_resolves_failed_on_corrupt_bytes(client, corrupt_image_bytes):
+    """
+    Corrupt bytes cannot be decoded — pipeline raises ContourNotFoundError
+    before the fallback, so the job must resolve as failed.
+    """
+    data = {"file": (io.BytesIO(corrupt_image_bytes), "corrupt.jpg", "image/jpeg")}
+    submit_res = client.post("/api/documents/scan", data=data, content_type="multipart/form-data")
+    assert submit_res.status_code == 202
+
+    job_id = submit_res.get_json()["job_id"]
+
     for _ in range(20):
         poll_res = client.get(f"/api/documents/jobs/{job_id}")
         assert poll_res.status_code == 200

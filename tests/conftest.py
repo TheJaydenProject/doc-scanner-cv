@@ -5,6 +5,21 @@ import pytest
 from app import create_app
 
 
+@pytest.fixture(autouse=True)
+def reset_scan_state():
+    """Reset module-level rate-limiting globals between tests for isolation."""
+    import api.documents as doc_api
+    doc_api._active_ips.clear()
+    doc_api._job_store.clear()
+    with doc_api._active_job_lock:
+        doc_api._active_job_count = 0
+    yield
+    doc_api._active_ips.clear()
+    doc_api._job_store.clear()
+    with doc_api._active_job_lock:
+        doc_api._active_job_count = 0
+
+
 @pytest.fixture
 def client():
     app = create_app()
@@ -34,6 +49,12 @@ def minimal_jpeg_bytes() -> bytes:
     img = np.zeros((10, 10, 3), dtype=np.uint8)
     _, buffer = cv2.imencode(".jpg", img)
     return buffer.tobytes()
+
+
+@pytest.fixture
+def corrupt_image_bytes() -> bytes:
+    """Raw garbage bytes — cv2.imdecode returns None, triggering ContourNotFoundError."""
+    return b"not an image"
 
 
 @pytest.fixture

@@ -113,10 +113,16 @@ def binarize(warped: np.ndarray) -> np.ndarray:
 def run_pipeline(image_bytes: bytes) -> np.ndarray:
     """
     Runs the full scanner pipeline.
-    Returns the binarized, warped image as a numpy array.
-    Raises ContourNotFoundError if no document boundary is detected.
+    Returns the binarized image. If no document boundary is detected,
+    falls back to binarizing the full frame without perspective correction.
+    Raises ContourNotFoundError only if the image bytes cannot be decoded.
     """
     blurred = preprocess(image_bytes)
-    contour = find_document_contour(blurred)
-    warped = perspective_transform(image_bytes, contour)
-    return binarize(warped)
+    try:
+        contour = find_document_contour(blurred)
+        warped = perspective_transform(image_bytes, contour)
+        return binarize(warped)
+    except ContourNotFoundError:
+        np_array = np.frombuffer(image_bytes, np.uint8)
+        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+        return binarize(image)
