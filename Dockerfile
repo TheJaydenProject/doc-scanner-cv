@@ -24,6 +24,10 @@ COPY . .
 # bundles the Vue SPA into static/. All three must pass before the container starts serving.
 RUN npm ci && npm run check && npm run build
 
+# Restore committed static assets wiped by Vite's emptyOutDir.
+COPY static/examples static/examples
+COPY static/docs.html static/docs.html
+
 EXPOSE 5000
 
 CMD ["python", "-m", "gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:create_app()"]

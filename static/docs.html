@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doc Scanner CV — API Reference</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #ffffff;
+      --text-muted: #888888;
+      --accent: #2563eb;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    header {
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel h2 {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .section-desc { font-size: 13px; color: var(--text-muted); }
+
+    .endpoint { margin-bottom: 48px; }
+    .endpoint:last-child { margin-bottom: 0; }
+
+    .method-path {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .method {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.05em;
+    }
+    .method.post { background: #1d4ed8; color: #fff; }
+    .method.get  { background: #166534; color: #fff; }
+
+    .path {
+      font-family: "Courier New", monospace;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .endpoint-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    td code {
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+
+    .status { font-family: "Courier New", monospace; font-size: 12px; }
+    .status.ok  { color: #4ade80; }
+    .status.err { color: #f87171; }
+
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      font-size: 12px;
+      font-family: "Courier New", monospace;
+      overflow-x: auto;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .flow {
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+      color: var(--text-muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      line-height: 2;
+    }
+
+    .back-link {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .back-link:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Doc Scanner CV</h1>
+    <nav>
+      <a href="/" class="back-link">&#x2190; Back to App</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>API Reference</h2>
+      <p class="section-desc">
+        Base URL: <code>https://your-tunnel-url.trycloudflare.com</code><br/>
+        All endpoints return JSON. All errors include an <code>error</code> string field.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>Async Job Flow</h2>
+      <div class="flow">
+        POST /api/documents/scan &#x2192; 202 { job_id }<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; poll every 1.5s<br/>
+        GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "processing" }<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; when ready<br/>
+        GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "complete", result: { ... } }<br/>
+        &nbsp;&nbsp;&nbsp;&nbsp;&#x2193;<br/>
+        GET /api/documents/metrics &#x2192; dashboard data
+      </div>
+    </section>
+
+    <section class="panel">
+
+      <div class="endpoint">
+        <div class="method-path">
+          <span class="method post">POST</span>
+          <span class="path">/api/documents/scan</span>
+        </div>
+        <p class="endpoint-desc">
+          Accepts an image upload, validates it, submits the CV pipeline to a background thread,
+          and immediately returns a job ID. Subject to rate limiting: 5 requests per IP per hour,
+          1 concurrent scan per IP, 3 concurrent scans globally.
+        </p>
+        <table>
+          <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>file</code></td><td>multipart/form-data</td><td>JPEG or PNG, max 2MB</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Status</th><th>Body</th><th>Condition</th></tr></thead>
+          <tbody>
+            <tr><td><span class="status ok">202</span></td><td><code>{ job_id }</code></td><td>Job accepted</td></tr>
+            <tr><td><span class="status err">400</span></td><td><code>{ error }</code></td><td>Missing file, wrong MIME type, empty file</td></tr>
+            <tr><td><span class="status err">429</span></td><td><code>{ error }</code></td><td>Rate limit exceeded or server at capacity</td></tr>
+          </tbody>
+        </table>
+        <pre>// Request
+POST /api/documents/scan
+Content-Type: multipart/form-data
+Body: file=&lt;image.jpg&gt;
+
+// Response 202
+{ "job_id": "a3f2c1d4-..." }</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="method-path">
+          <span class="method get">GET</span>
+          <span class="path">/api/documents/jobs/&lt;job_id&gt;</span>
+        </div>
+        <p class="endpoint-desc">
+          Polls the status of a scan job. Returns processing, complete, or failed.
+          Poll every 1.5 seconds; client enforces a 60-second timeout.
+        </p>
+        <table>
+          <thead><tr><th>Status</th><th>Body</th><th>Condition</th></tr></thead>
+          <tbody>
+            <tr><td><span class="status ok">200</span></td><td><code>{ status, result? }</code></td><td>Job found</td></tr>
+            <tr><td><span class="status err">404</span></td><td><code>{ error }</code></td><td>Job ID not found</td></tr>
+          </tbody>
+        </table>
+        <pre>// Response — complete
+{
+  "status": "complete",
+  "result": {
+    "text": "extracted text here...",
+    "char_count": 342,
+    "word_count": 61,
+    "processing_time_ms": 1240,
+    "image_b64": "iVBORw0KGgo...",
+    "detection_count": 47,
+    "doc_type": "printed",
+    "doc_type_confidence": 0.7821
+  }
+}
+
+// Response — failed
+{
+  "status": "failed",
+  "error": "No four-point document contour found."
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="method-path">
+          <span class="method get">GET</span>
+          <span class="path">/api/documents/history</span>
+        </div>
+        <p class="endpoint-desc">
+          Returns the 50 most recent scan records from the database, ordered newest first.
+        </p>
+        <table>
+          <thead><tr><th>Status</th><th>Body</th></tr></thead>
+          <tbody>
+            <tr><td><span class="status ok">200</span></td><td>Array of scan records</td></tr>
+          </tbody>
+        </table>
+        <pre>// Response 200
+[
+  {
+    "id": 12,
+    "filename": "note.jpg",
+    "char_count": 342,
+    "word_count": 61,
+    "processing_time_ms": 1240,
+    "created_at": "2026-06-17T10:32:00"
+  },
+  ...
+]</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="method-path">
+          <span class="method get">GET</span>
+          <span class="path">/api/documents/metrics</span>
+        </div>
+        <p class="endpoint-desc">
+          Returns aggregated statistics across all scans plus the 10 most recent records.
+          Used to populate the Chart.js dashboard.
+        </p>
+        <table>
+          <thead><tr><th>Status</th><th>Body</th></tr></thead>
+          <tbody>
+            <tr><td><span class="status ok">200</span></td><td>Aggregated stats + recent array</td></tr>
+          </tbody>
+        </table>
+        <pre>// Response 200
+{
+  "total_scans": 47,
+  "avg_processing_time_ms": 1180,
+  "avg_char_count": 298,
+  "recent": [
+    {
+      "filename": "note.jpg",
+      "char_count": 342,
+      "processing_time_ms": 1240,
+      "created_at": "2026-06-17T10:32:00"
+    },
+    ...
+  ]
+}</pre>
+      </div>
+
+    </section>
+
+    <section class="panel">
+      <h2>Rate Limits</h2>
+      <table>
+        <thead><tr><th>Limit</th><th>Value</th><th>Scope</th></tr></thead>
+        <tbody>
+          <tr><td>Scan submissions</td><td>5 per hour</td><td>Per IP</td></tr>
+          <tr><td>Concurrent scans</td><td>1 at a time</td><td>Per IP</td></tr>
+          <tr><td>Global concurrent scans</td><td>3 max</td><td>Server-wide</td></tr>
+          <tr><td>File size</td><td>2MB max</td><td>Per request</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+</body>
+</html>
