@@ -21,6 +21,7 @@ const props = defineProps<{
 const editableText = ref("");
 const lightboxSrc = ref("");
 const lightboxVisible = ref(false);
+const copied = ref(false);
 const activeStage = ref<StageKey>("detected");
 const hoveredBox = ref<number | null>(null);
 const naturalWidth = ref(0);
@@ -91,7 +92,12 @@ function onCompareImageLoad(event: Event) {
 }
 
 function copyText() {
-  navigator.clipboard.writeText(editableText.value);
+  navigator.clipboard.writeText(editableText.value).then(() => {
+    copied.value = true;
+    setTimeout(() => {
+      copied.value = false;
+    }, 2000);
+  });
 }
 
 function openLightbox(src: string) {
@@ -217,7 +223,12 @@ function openLightbox(src: string) {
         spellcheck="false"
         v-model="editableText"
       ></textarea>
-      <button id="copy-btn" @click="copyText">Copy Text</button>
+      <div class="copy-row">
+        <button id="copy-btn" @click="copyText">Copy Text</button>
+        <Transition name="copy-feedback">
+          <span v-if="copied" class="copy-confirm">&#10003; Copied</span>
+        </Transition>
+      </div>
     </template>
     <p v-else class="empty-state">
       Upload a document on the left to see results here.
@@ -230,3 +241,40 @@ function openLightbox(src: string) {
     />
   </section>
 </template>
+
+<style scoped>
+.copy-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.copy-confirm {
+  font-size: 12px;
+  color: #4ade80;
+  letter-spacing: 0.02em;
+}
+
+.copy-feedback-enter-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.copy-feedback-leave-active {
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease;
+}
+
+.copy-feedback-enter-from {
+  opacity: 0;
+  transform: translateX(-4px);
+}
+
+.copy-feedback-leave-to {
+  opacity: 0;
+  transform: translateX(4px);
+}
+</style>
