@@ -50,7 +50,7 @@ async function refresh() {
           {
             label: "Character Count",
             data: charCounts,
-            backgroundColor: "#ffffff",
+            backgroundColor: "#eb6325",
             borderRadius: 2,
           },
         ],
@@ -88,7 +88,7 @@ async function refresh() {
           {
             label: "Processing Time (ms)",
             data: processingTimes,
-            borderColor: "#ffffff",
+            borderColor: "#eb6325",
             backgroundColor: "transparent",
             tension: 0,
             pointRadius: 3,
