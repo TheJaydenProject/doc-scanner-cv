@@ -235,7 +235,10 @@ button {
   border-radius: var(--radius-sm);
   cursor: pointer;
   width: fit-content;
-  transition: background 150ms ease;
+  transition:
+    background 150ms ease,
+    transform 100ms ease,
+    box-shadow 100ms ease;
 }
 
 button:disabled {
@@ -247,6 +250,18 @@ button:disabled {
 #copy-btn:hover:not(:disabled) {
   background: #e0e0e0;
   transform: scale(1.01);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.08);
+}
+
+#scan-btn:active:not(:disabled),
+#copy-btn:active:not(:disabled) {
+  background: #c8c8c8;
+  transform: scale(0.97);
+  box-shadow: none;
+  transition:
+    background 60ms ease,
+    transform 60ms ease,
+    box-shadow 60ms ease;
 }
 
 button:focus-visible,
