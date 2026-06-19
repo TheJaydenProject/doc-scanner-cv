@@ -574,24 +574,6 @@ canvas {
   box-shadow: 0 0 0 1px #444444;
 }
 
-.example-images {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.example-images img {
-  min-height: 220px;
-  max-height: 38vh;
-}
-
-.arrow {
-  font-size: 18px;
-  color: var(--ink-tertiary);
-  text-align: center;
-}
-
 .lightbox-trigger {
   cursor: zoom-in;
   transition: opacity 0.15s;
@@ -712,6 +694,58 @@ canvas {
 .file-pick-btn:hover:not(:disabled) {
   background: var(--border);
   border-color: #555555;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .panel-left,
+  .panel-right {
+    overflow-y: visible;
+  }
+
+  .topnav {
+    padding: 0 var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .nav-tabs {
+    gap: var(--space-3);
+  }
+
+  #stats-row,
+  #scan-meta-row {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-view {
+    flex-direction: column;
+  }
+
+  .compare-half:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 var(--space-4) 0;
+  }
+
+  .compare-half:last-child {
+    padding: var(--space-4) 0 0 0;
+  }
+
+  .example-card {
+    min-width: 100%;
+  }
+
+  /* Vue's scoped-style attribute selector outranks a plain class here, so
+     winning the cascade in this global override needs !important. */
+  .pipeline-track {
+    grid-template-columns: 1fr 1fr !important;
+  }
 }
 
 .file-hint {
