@@ -81,7 +81,6 @@ function openLightbox(src: string) {
 .pipeline-track img {
   width: 100%;
   height: auto;
-  max-height: 200px;
   object-fit: contain;
   background: var(--inset);
   border: 1px solid var(--border-strong);

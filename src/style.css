@@ -546,19 +546,15 @@ canvas {
 
 .example-grid {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--space-4);
   overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
-  align-items: flex-start;
-  align-content: flex-start;
   scrollbar-width: thin;
 }
 
 .example-card {
-  flex: 1 1 480px;
-  min-width: 480px;
   border: 1px solid #444444;
   border-radius: var(--radius-md);
   padding: var(--space-4);
@@ -706,16 +702,38 @@ canvas {
 
   .panel-left,
   .panel-right {
+    /* Without this, both panels flex-shrink to split .app-shell's height in
+       half (their min-height:0 from the desktop grid allows it), squeezing
+       #dashboard's charts (which have a hard min-height) until they overflow
+       past their own box and visually bleed into the panel below. Each
+       panel must take its natural content height; .app-shell's overflow-y
+       handles the rest via page scroll. */
+    flex: 0 0 auto;
     overflow-y: visible;
   }
 
   .topnav {
-    padding: 0 var(--space-4);
-    gap: var(--space-4);
+    padding: 0 var(--space-3);
+    gap: var(--space-3);
+  }
+
+  .nav-brand {
+    font-size: 11.5px;
+    gap: var(--space-1);
+    white-space: nowrap;
   }
 
   .nav-tabs {
-    gap: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .nav-tab {
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+
+  .nav-cta {
+    padding: var(--space-1) var(--space-2);
   }
 
   #stats-row,
@@ -735,10 +753,6 @@ canvas {
 
   .compare-half:last-child {
     padding: var(--space-4) 0 0 0;
-  }
-
-  .example-card {
-    min-width: 100%;
   }
 
   /* Vue's scoped-style attribute selector outranks a plain class here, so
