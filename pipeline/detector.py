@@ -24,6 +24,11 @@ def detect_text_regions(binarized: np.ndarray) -> tuple[np.ndarray, list[tuple[i
         # without rejecting small punctuation on typical document resolutions.
         if w * h < 100:
             continue
+        # Ruled/feint lines surface as very wide, very thin MSER regions —
+        # real text characters and words don't reach a 15:1 width-to-height
+        # ratio, and rule lines are only a few pixels tall.
+        if w / max(h, 1) >= 15 or h <= 8:
+            continue
         detections.append((int(x), int(y), int(w), int(h)))
         cv2.rectangle(annotated, (x, y), (x + w, y + h), (37, 99, 235), 1)
 

@@ -20,6 +20,7 @@ from pipeline.scanner import (
     ContourNotFoundError,
     binarize_handwritten,
     binarize_printed,
+    remove_horizontal_lines,
     run_pipeline,
 )
 
@@ -85,11 +86,16 @@ def _run_scan_job(
             else:
                 binarized = binarize_handwritten(clean_image)
 
+            # Ruled lines confuse both MSER and Tesseract — strip them before
+            # detection/OCR, but keep the original `binarized` for display so
+            # the Binarized/Detected stage images still show the real scan.
+            cleaned = remove_horizontal_lines(binarized)
+
             # detections are returned as raw coordinates so the frontend can draw
             # its own interactive overlay; the burned-in annotated image is unused.
-            _, detections = detect_text_regions(binarized)
+            _, detections = detect_text_regions(cleaned)
 
-            text = extract_text(binarized, doc_type=doc_type["label"])
+            text = extract_text(cleaned, doc_type=doc_type["label"])
 
             def encode_png(image) -> str:
                 _, buffer = cv2.imencode(".png", image)

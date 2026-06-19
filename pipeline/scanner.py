@@ -149,6 +149,19 @@ def binarize_handwritten(image: np.ndarray) -> np.ndarray:
     )
 
 
+def remove_horizontal_lines(binary: np.ndarray) -> np.ndarray:
+    """
+    Erases ruled/feint lines (notebook or index-card rules) from a binarized
+    image before MSER/OCR see it. Targets only long, thin horizontal strokes —
+    a kernel this wide never matches real text characters or word connectors.
+    """
+    inverted = cv2.bitwise_not(binary)
+    kernel_width = max(binary.shape[1] // 15, 1)
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 1))
+    detected_lines = cv2.morphologyEx(inverted, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
+    return cv2.bitwise_or(binary, detected_lines)
+
+
 def run_pipeline(image_bytes: bytes) -> tuple[np.ndarray, bool]:
     """
     Runs perspective correction only. Returns (image, warped):
