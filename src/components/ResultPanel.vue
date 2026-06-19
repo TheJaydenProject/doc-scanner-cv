@@ -105,7 +105,9 @@ function openLightbox(src: string) {
           :aria-selected="activeStage === stage.key"
           @click="activeStage = stage.key"
         >
-          <span v-if="stage.key !== 'compare'" class="stage-index">{{ i + 1 }}</span>
+          <span v-if="stage.key !== 'compare'" class="stage-index">{{
+            i + 1
+          }}</span>
           {{ stage.label }}
         </button>
       </div>
@@ -130,26 +132,7 @@ function openLightbox(src: string) {
               alt="Detected stage"
               class="lightbox-trigger"
               @click="openLightbox(stageSrc('detected'))"
-              @load="onStageImageLoad"
             />
-            <svg
-              v-if="naturalWidth && naturalHeight"
-              class="detection-overlay"
-              :viewBox="`0 0 ${naturalWidth} ${naturalHeight}`"
-              preserveAspectRatio="xMidYMid meet"
-            >
-              <rect
-                v-for="(box, i) in result.detections"
-                :key="i"
-                :x="box[0]"
-                :y="box[1]"
-                :width="box[2]"
-                :height="box[3]"
-                :class="{ hovered: hoveredBox === i }"
-                @mouseenter="hoveredBox = i"
-                @mouseleave="hoveredBox = null"
-              />
-            </svg>
           </div>
         </figure>
       </div>
@@ -195,15 +178,28 @@ function openLightbox(src: string) {
         </div>
         <div class="stat-card">
           <span class="stat-label">Classifier Confidence</span>
-          <span class="stat-value">{{ (result.doc_type_confidence * 100).toFixed(1) }}%</span>
+          <span class="stat-value"
+            >{{ (result.doc_type_confidence * 100).toFixed(1) }}%</span
+          >
         </div>
       </div>
       <label for="extracted-text">Extracted Text</label>
-      <textarea id="extracted-text" rows="10" spellcheck="false" v-model="editableText"></textarea>
+      <textarea
+        id="extracted-text"
+        rows="10"
+        spellcheck="false"
+        v-model="editableText"
+      ></textarea>
       <button id="copy-btn" @click="copyText">Copy Text</button>
     </template>
-    <p v-else class="empty-state">Upload a document on the left to see results here.</p>
+    <p v-else class="empty-state">
+      Upload a document on the left to see results here.
+    </p>
 
-    <Lightbox :src="lightboxSrc" :visible="lightboxVisible" @close="lightboxVisible = false" />
+    <Lightbox
+      :src="lightboxSrc"
+      :visible="lightboxVisible"
+      @close="lightboxVisible = false"
+    />
   </section>
 </template>
