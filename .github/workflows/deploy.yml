@@ -1,0 +1,156 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-doc-scanner-cv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Frontend ────────────────────────────────────────────────────────────────
+  frontend-check:
+    name: Frontend — Lint & Type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Biome lint + format check
+        run: npx biome check src/
+
+      - name: Type-check & build
+        # vue-tsc is the type-checker; vite build confirms the bundle compiles
+        run: npm run build
+
+  # ─── Backend ─────────────────────────────────────────────────────────────────
+  backend-check:
+    name: Backend — Lint, Type-check & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system deps required by OpenCV and Tesseract
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            tesseract-ocr \
+            libgl1 \
+            libglib2.0-0
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ruff lint
+        # Ruff is not in requirements.txt because it's a dev-only tool.
+        # Pinned here to keep CI deterministic; bump deliberately.
+        run: |
+          pip install ruff==0.4.4
+          ruff check .
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  # ─── Deploy ──────────────────────────────────────────────────────────────────
+  # Only runs on pushes to main after both check jobs pass.
+  # PRs never reach this job.
+  deploy:
+    name: Deploy to VPS
+    needs: [frontend-check, backend-check]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare staging directory on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            rm -rf ~/deploy_staging_doc_scanner
+            mkdir -p ~/deploy_staging_doc_scanner
+
+      - name: Copy source to staging
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          # models/ is committed and must be included — ONNX runtime needs both
+          # doc_classifier.onnx and doc_classifier.onnx.data at runtime.
+          source: "api,app.py,models.py,models,pipeline,requirements.txt,static,Dockerfile,docker-compose.yml,package.json,package-lock.json,src,biome.json,tsconfig.json,vite.config.ts,index.html"
+          target: "/home/${{ secrets.SSH_USER }}/deploy_staging_doc_scanner"
+          strip_components: 0
+
+      - name: Sync, build & restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+
+            STAGING=~/deploy_staging_doc_scanner
+            APP=~/doc-scanner-cv
+
+            echo "==> Syncing source..."
+            rsync -a --delete \
+              --exclude='.env' \
+              --exclude='node_modules' \
+              --exclude='dist' \
+              --exclude='data' \
+              --exclude='instance' \
+              "$STAGING/" "$APP/"
+
+            echo "==> Building image..."
+            cd "$APP"
+            docker compose build doc-scanner-cv
+
+            echo "==> Restarting containers..."
+            docker compose up -d --remove-orphans
+
+            echo "==> Verifying health..."
+            EXPECTED=$(docker compose config --services | wc -l)
+            for i in $(seq 1 12); do
+              RUNNING=$(docker compose ps --status running -q | wc -l)
+              if [ "$RUNNING" -ge "$EXPECTED" ]; then
+                echo "Deployment OK ($RUNNING/$EXPECTED containers running)"
+                docker compose ps
+                rm -rf "$STAGING"
+                exit 0
+              fi
+              echo "Waiting... ($RUNNING/$EXPECTED running, attempt $i/12)"
+              sleep 5
+            done
+
+            echo "Deployment FAILED — only $RUNNING/$EXPECTED containers running after 60s"
+            docker compose ps
+            docker compose logs --tail=50
+            exit 1
