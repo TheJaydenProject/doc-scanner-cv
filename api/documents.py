@@ -1,4 +1,3 @@
-import atexit
 import base64
 import time
 import uuid

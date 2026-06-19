@@ -1,6 +1,4 @@
 import numpy as np
-import cv2
-import pytest
 from pipeline.detector import detect_text_regions
 from pipeline.classifier import classify_document
 
