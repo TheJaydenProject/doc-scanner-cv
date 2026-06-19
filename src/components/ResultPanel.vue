@@ -3,13 +3,14 @@ import { ref, watch, computed } from "vue";
 import type { ScanResult } from "../types";
 import Lightbox from "./Lightbox.vue";
 
-type StageKey = "raw" | "warped" | "binarized" | "detected";
+type StageKey = "raw" | "warped" | "binarized" | "detected" | "compare";
 
 const STAGES: { key: StageKey; label: string }[] = [
   { key: "raw", label: "Raw" },
   { key: "warped", label: "Warped" },
   { key: "binarized", label: "Binarized" },
   { key: "detected", label: "Detected" },
+  { key: "compare", label: "Compare" },
 ];
 
 const props = defineProps<{
@@ -50,6 +51,8 @@ function stageSrc(key: StageKey): string {
     case "binarized":
     case "detected":
       return `data:image/png;base64,${props.result.binarized_image_b64}`;
+    case "compare":
+      return "";
   }
 }
 
@@ -66,6 +69,8 @@ function stageCaption(key: StageKey): string {
       const n = props.result.detection_count;
       return `${n} MSER text region${n === 1 ? "" : "s"} — hover a box to inspect it.`;
     }
+    case "compare":
+      return "";
   }
 }
 
@@ -100,12 +105,55 @@ function openLightbox(src: string) {
           :aria-selected="activeStage === stage.key"
           @click="activeStage = stage.key"
         >
-          <span class="stage-index">{{ i + 1 }}</span>
+          <span v-if="stage.key !== 'compare'" class="stage-index">{{ i + 1 }}</span>
           {{ stage.label }}
         </button>
       </div>
 
-      <figure id="stage-viewer">
+      <div v-if="activeStage === 'compare'" class="compare-view">
+        <figure class="compare-half">
+          <figcaption>Before</figcaption>
+          <div class="frame compare-frame">
+            <img
+              :src="stageSrc('raw')"
+              alt="Raw stage"
+              class="lightbox-trigger"
+              @click="openLightbox(stageSrc('raw'))"
+            />
+          </div>
+        </figure>
+        <figure class="compare-half">
+          <figcaption>After</figcaption>
+          <div class="frame compare-frame">
+            <img
+              :src="stageSrc('detected')"
+              alt="Detected stage"
+              class="lightbox-trigger"
+              @click="openLightbox(stageSrc('detected'))"
+              @load="onStageImageLoad"
+            />
+            <svg
+              v-if="naturalWidth && naturalHeight"
+              class="detection-overlay"
+              :viewBox="`0 0 ${naturalWidth} ${naturalHeight}`"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <rect
+                v-for="(box, i) in result.detections"
+                :key="i"
+                :x="box[0]"
+                :y="box[1]"
+                :width="box[2]"
+                :height="box[3]"
+                :class="{ hovered: hoveredBox === i }"
+                @mouseenter="hoveredBox = i"
+                @mouseleave="hoveredBox = null"
+              />
+            </svg>
+          </div>
+        </figure>
+      </div>
+      <figure v-else id="stage-viewer">
         <div class="frame stage-frame">
           <img
             :src="stageSrc(activeStage)"
