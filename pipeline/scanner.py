@@ -4,6 +4,7 @@ import numpy as np
 
 class ContourNotFoundError(Exception):
     """Raised when no valid four-point document contour is found."""
+
     pass
 
 
@@ -63,8 +64,8 @@ def order_points(pts: np.ndarray) -> np.ndarray:
     pts = pts.reshape(4, 2).astype("float32")
 
     point_sums = pts[:, 0] + pts[:, 1]
-    rect[0] = pts[np.argmin(point_sums)]   # top-left: smallest x+y
-    rect[2] = pts[np.argmax(point_sums)]   # bottom-right: largest x+y
+    rect[0] = pts[np.argmin(point_sums)]  # top-left: smallest x+y
+    rect[2] = pts[np.argmax(point_sums)]  # bottom-right: largest x+y
 
     point_diffs = pts[:, 0] - pts[:, 1]
     rect[1] = pts[np.argmax(point_diffs)]  # top-right: largest x-y
@@ -109,12 +110,15 @@ def perspective_transform(image_bytes: bytes, contour: np.ndarray) -> np.ndarray
     height_b = np.linalg.norm(tl - bl)
     max_height = int(max(height_a, height_b))
 
-    dst = np.array([
-        [0, 0],
-        [max_width - 1, 0],
-        [max_width - 1, max_height - 1],
-        [0, max_height - 1]
-    ], dtype="float32")
+    dst = np.array(
+        [
+            [0, 0],
+            [max_width - 1, 0],
+            [max_width - 1, max_height - 1],
+            [0, max_height - 1],
+        ],
+        dtype="float32",
+    )
 
     M = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(image, M, (max_width, max_height))
@@ -125,7 +129,7 @@ def perspective_transform(image_bytes: bytes, contour: np.ndarray) -> np.ndarray
     dx = int(max_width * INSET_RATIO)
     dy = int(max_height * INSET_RATIO)
     if dx > 0 and dy > 0 and (max_width - 2 * dx) > 0 and (max_height - 2 * dy) > 0:
-        warped = warped[dy:max_height - dy, dx:max_width - dx]
+        warped = warped[dy : max_height - dy, dx : max_width - dx]
 
     return warped
 
@@ -142,48 +146,50 @@ def binarize_handwritten(image: np.ndarray) -> np.ndarray:
     l_channel, _, _ = cv2.split(lab)
     blurred = cv2.GaussianBlur(l_channel, (5, 5), 0)
     return cv2.adaptiveThreshold(
-        blurred, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        51, 15
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 51, 15
     )
 
 
 def remove_horizontal_lines(binary: np.ndarray) -> np.ndarray:
     """
     Erases ruled/feint lines (notebook or index-card rules) from a binarized
-    image before MSER/OCR see it. Uses HoughLinesP rather than a fixed
-    horizontal kernel — perspective warp residue and paper curl mean ruled
-    lines aren't pixel-perfect horizontals, and a 1-row-tall kernel only
-    matches a line that stays within that exact row for its full length.
-    Hough tolerates a +/-10 degree tilt.
+    image before MSER/OCR see it.
 
-    threshold=250 and maxLineGap=0 are deliberately strict: a lower
-    threshold or a nonzero gap starts bridging the disconnected strokes of
-    handwritten words into false "lines" and erases the text itself (visually
-    confirmed against real notebook scans — text was largely wiped out at
-    threshold=80/maxLineGap=15). These settings only catch the genuinely
-    continuous runs that ruled lines produce.
+    Uses a morphological OPEN with a wide horizontal kernel rather than
+    HoughLinesP. The Hough approach required a continuous uninterrupted run
+    of >= 250 pixels, but handwritten letters sitting ON a ruled line break
+    it into short segments that all fall below that threshold — so the line
+    was never detected and Tesseract read the fragments as dashes and tildes.
+
+    A horizontal kernel of width = image_width // 5 (20 % of image width)
+    is selective: real ruled lines span ~100 % of the page width, so their
+    between-letter segments survive the opening. The widest single letter
+    stroke is at most 5–10 % of image width, so all text is erased from the
+    detection mask. Once the affected Y-rows are known, the entire row is
+    blanked — this also removes the segments hidden directly under letters.
     """
+    h, w = binary.shape
+    # 20 % of image width comfortably separates ruled lines (near 100 % wide)
+    # from the widest letter stroke (< 10 % wide). Floor at 30 px for tiny images.
+    kernel_length = max(w // 5, 30)
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_length, 1))
+
+    # MORPH_OPEN on the inverted image (ink = white) keeps only structures
+    # that are at least kernel_length pixels wide — i.e. ruled lines only.
     inverted = cv2.bitwise_not(binary)
-    min_length = int(binary.shape[1] * 0.15)
-    lines = cv2.HoughLinesP(
-        inverted,
-        rho=1,
-        theta=np.pi / 180,
-        threshold=250,
-        minLineLength=min_length,
-        maxLineGap=0,
+    detected = cv2.morphologyEx(
+        inverted, cv2.MORPH_OPEN, horizontal_kernel, iterations=2
     )
 
-    if lines is None:
+    # Find every row that contains a detected line pixel.
+    line_rows = np.where(detected.any(axis=1))[0]
+    if line_rows.size == 0:
         return binary
 
     cleaned = binary.copy()
-    for (x1, y1, x2, y2) in lines[:, 0]:
-        angle = abs(np.arctan2(y2 - y1, x2 - x1) * 180.0 / np.pi)
-        if angle < 10.0 or angle > 170.0:
-            cv2.line(cleaned, (x1, y1), (x2, y2), 255, thickness=3)
+    for y in line_rows:
+        # thickness=3 covers typical 1-2 px ruled lines plus any antialiasing.
+        cv2.line(cleaned, (0, int(y)), (w - 1, int(y)), 255, thickness=3)
 
     return cleaned
 
