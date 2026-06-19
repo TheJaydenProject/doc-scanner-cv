@@ -15,7 +15,7 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
 3. **Boundary validation**: The detected quad's area is compared against the full frame (shoelace formula). A ratio outside `[0.15, 0.97]` means the contour isn't a real document edge — too small is a stray text blob or noise artifact, too large is the contour just tracing the image frame (e.g. a flat digital screenshot with no physical boundary). Either way, the perspective warp is skipped and the original frame passes through unchanged.
 4. **Perspective transform**: Only run when the boundary passes validation. Corner points are sorted into `[top-left, top-right, bottom-right, bottom-left]` order using per-point coordinate sums and differences. `getPerspectiveTransform` and `warpPerspective` produce a flat, axis-aligned crop, then a symmetric 2.5% inset crop removes the binding/shadow sliver left at the contour edge.
 5. **Document classification**: Runs on the clean image (warped, or the original frame if the warp was skipped) before any binarization. A bright-pixel heuristic checks for flat digital documents directly — if over 85% of pixels exceed luminance 240, the image is classified `printed` immediately, bypassing the ONNX model. Otherwise, a MobileNetV2 ONNX model (opset 18) classifies the image as `printed`, `handwritten`, or `mixed`. The `InferenceSession` is loaded once per process and reused across all requests to avoid the 100-300ms initialization cost.
-6. **Binarize**: Branches by predicted type. `printed` uses Otsu's threshold (predictable bimodal contrast on flat ink); `handwritten`/`mixed` use adaptive Gaussian thresholding on the LAB lightness channel (block size 51, C=15), which tolerates uneven lighting and colored backgrounds better.
+6. **Binarize**: Branches by predicted type. `printed` uses Otsu's threshold (predictable bimodal contrast on flat ink); `handwritten`/`mixed` use adaptive Gaussian thresholding on the LAB lightness channel (block size 51, C=15), which tolerates uneven lighting and colored backgrounds better. A Probabilistic Hough Transform (`HoughLinesP`) then erases ruled/feint notebook lines, which tolerates the slight tilt that perspective warp and paper curl leave behind — something a fixed horizontal kernel can't follow.
 7. **Text region detection**: MSER runs on the binarized image. Bounding boxes under 100 px² are discarded as noise artifacts. Detected regions are returned as raw coordinates for the frontend to draw its own overlay.
 8. **OCR**: pytesseract extracts text from the binarized image using a page segmentation mode chosen by document type — PSM 3 (fully automatic page segmentation) for `printed`, which handles multi-paragraph layouts; PSM 6 (single uniform text block) for `handwritten`/`mixed`, which fits a tightly-cropped note. The result, character count, word count, processing time, and both clean/binarized images are persisted to SQLite and returned to the client.
 
@@ -36,7 +36,7 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
       |
   [Classifier]      bright-pixel heuristic -> printed, else MobileNetV2 ONNX -> printed | handwritten | mixed
       |
-  [Binarize]        Otsu (printed) | LAB-channel adaptive threshold (handwritten | mixed)
+  [Binarize]        Otsu (printed) | LAB-channel adaptive threshold (handwritten | mixed) -> Hough line removal
       |
   [MSER Detector]   text region bounding boxes
       |
@@ -304,10 +304,12 @@ pytest tests/ -v
 - [x] SQLite persistence with scan history and aggregate metrics
 - [x] Vue 3 SPA with Chart.js dashboard
 - [x] Docker + Cloudflare Tunnel configuration
-- [x] Examples gallery with before/after image pairs
+- [x] Examples gallery showing the 4-stage pipeline (raw, warped, binarized, detected) for a handwritten and a printed document
 - [x] Static API documentation page
 - [x] Live VPS deployment
 - [x] Flat digital document handling: boundary-ratio check skips the perspective warp on implausible contours, a bright-pixel heuristic classifies flat documents as `printed` without the untrained ONNX head, and OCR page segmentation mode is chosen by document type
+- [x] Probabilistic Hough Transform line erasure to prevent OCR/MSER artifacts on ruled paper, tolerant of the slight tilt left by perspective warp and paper curl
+- [x] Mobile-responsive layout for the Vue SPA interface
 - [ ] GitHub Actions CI
 
 ---
