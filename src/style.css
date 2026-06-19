@@ -242,12 +242,9 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button:hover:not(:disabled) {
-  background: #e0e0e0;
-}
-
 #scan-btn:hover:not(:disabled),
 #copy-btn:hover:not(:disabled) {
+  background: #e0e0e0;
   transform: scale(1.01);
 }
 
