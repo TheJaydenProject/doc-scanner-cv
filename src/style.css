@@ -375,6 +375,7 @@ button:focus-visible,
 
 .compare-frame {
   position: relative;
+  width: 100%;
   height: 38vh;
   background: var(--surface-1);
   border: 1px solid var(--border-strong);
@@ -618,41 +619,6 @@ canvas {
   100% {
     transform: translateX(250%);
   }
-}
-
-/* Lightbox */
-#lightbox {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-#lightbox img {
-  max-width: 90vw;
-  max-height: 90vh;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-}
-
-#lightbox-close {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--ink);
-  font-size: 16px;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-}
-
-#lightbox-close:hover {
-  background: var(--surface-2);
 }
 
 /* Visually hidden but accessible file input */

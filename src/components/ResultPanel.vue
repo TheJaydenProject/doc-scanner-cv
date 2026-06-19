@@ -25,6 +25,8 @@ const activeStage = ref<StageKey>("detected");
 const hoveredBox = ref<number | null>(null);
 const naturalWidth = ref(0);
 const naturalHeight = ref(0);
+const compareNaturalWidth = ref(0);
+const compareNaturalHeight = ref(0);
 
 watch(
   () => props.result,
@@ -34,6 +36,8 @@ watch(
     hoveredBox.value = null;
     naturalWidth.value = 0;
     naturalHeight.value = 0;
+    compareNaturalWidth.value = 0;
+    compareNaturalHeight.value = 0;
   },
 );
 
@@ -78,6 +82,12 @@ function onStageImageLoad(event: Event) {
   const img = event.target as HTMLImageElement;
   naturalWidth.value = img.naturalWidth;
   naturalHeight.value = img.naturalHeight;
+}
+
+function onCompareImageLoad(event: Event) {
+  const img = event.target as HTMLImageElement;
+  compareNaturalWidth.value = img.naturalWidth;
+  compareNaturalHeight.value = img.naturalHeight;
 }
 
 function copyText() {
@@ -128,11 +138,28 @@ function openLightbox(src: string) {
           <figcaption>After</figcaption>
           <div class="frame compare-frame">
             <img
-              :src="stageSrc('detected')"
+              :src="stageSrc('binarized')"
               alt="Detected stage"
               class="lightbox-trigger"
-              @click="openLightbox(stageSrc('detected'))"
+              @click="openLightbox(stageSrc('binarized'))"
+              @load="onCompareImageLoad"
             />
+            <svg
+              v-if="compareNaturalWidth && compareNaturalHeight"
+              class="detection-overlay"
+              :viewBox="`0 0 ${compareNaturalWidth} ${compareNaturalHeight}`"
+              preserveAspectRatio="none"
+              style="pointer-events: none"
+            >
+              <rect
+                v-for="(box, i) in result.detections"
+                :key="i"
+                :x="box[0]"
+                :y="box[1]"
+                :width="box[2]"
+                :height="box[3]"
+              />
+            </svg>
           </div>
         </figure>
       </div>

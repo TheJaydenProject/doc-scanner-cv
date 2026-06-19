@@ -33,7 +33,8 @@ function openLightbox(src: string) {
   <section class="panel">
     <h2>Examples</h2>
     <p class="section-desc">
-      Real scans of handwritten and printed documents processed through the pipeline.
+      Real scans of handwritten and printed documents processed through the
+      pipeline.
     </p>
 
     <div class="example-grid">
@@ -41,7 +42,10 @@ function openLightbox(src: string) {
         <h3 class="example-title">{{ ex.label }}</h3>
         <div class="pipeline-track">
           <figure v-for="(stage, idx) in STAGES" :key="stage">
-            <figcaption>{{ idx + 1 }}. {{ stage.charAt(0).toUpperCase() + stage.slice(1) }}</figcaption>
+            <figcaption>
+              {{ idx + 1 }}.
+              {{ stage.charAt(0).toUpperCase() + stage.slice(1) }}
+            </figcaption>
             <img
               :src="stageSrc(ex, stage)"
               :alt="`${ex.id} ${stage}`"
@@ -73,7 +77,7 @@ function openLightbox(src: string) {
 
 .pipeline-track {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
   align-items: end;
 }
