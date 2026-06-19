@@ -4,6 +4,10 @@ import type { ScanResult } from "../types";
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_ATTEMPTS = 40;
+// Matches the backend's resolution-gate message (api/documents.py) — this
+// error is deterministic on retry, so the file selection gets cleared
+// instead of just re-enabling the Scan button like other failures.
+const RESOLUTION_ERROR_SIGNATURE = "too small to scan accurately";
 
 const emit = defineEmits<{
   "scan-complete": [result: ScanResult, file: File];
@@ -92,8 +96,15 @@ async function pollJob(jobId: string, file: File): Promise<void> {
 
 function showError(message: string) {
   loading.value = false;
-  scanDisabled.value = false;
   error.value = message;
+
+  if (message.includes(RESOLUTION_ERROR_SIGNATURE)) {
+    selectedFileName.value = "";
+    if (fileInput.value) fileInput.value.value = "";
+    scanDisabled.value = true;
+  } else {
+    scanDisabled.value = false;
+  }
 }
 </script>
 
@@ -125,6 +136,13 @@ function showError(message: string) {
         <div class="sweep-bar"></div>
       </div>
     </div>
-    <p v-if="error" class="error" id="error-msg">{{ error }}</p>
+    <p v-if="error" class="error" id="error-msg" role="alert">
+      <svg class="error-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.3" />
+        <line x1="10" y1="6" x2="10" y2="10.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        <circle cx="10" cy="13.5" r="0.8" fill="currentColor" />
+      </svg>
+      <span>{{ error }}</span>
+    </p>
   </section>
 </template>

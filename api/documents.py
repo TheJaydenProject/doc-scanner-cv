@@ -1,4 +1,6 @@
 import base64
+import logging
+import statistics
 import time
 import uuid
 from collections import OrderedDict
@@ -25,6 +27,8 @@ from pipeline.scanner import (
 
 documents_bp = Blueprint("documents", __name__)
 
+logger = logging.getLogger(__name__)
+
 # Global rate limiter — init_app() called in app factory.
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
@@ -34,6 +38,13 @@ executor = ThreadPoolExecutor(max_workers=3)
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 _MAX_CONCURRENT_GLOBAL = 3
+
+# Below this median MSER text-box height, OCR accuracy degrades sharply —
+# reject the scan instead of spending a Tesseract pass on it.
+MIN_TEXT_HEIGHT_PX = 30
+# Fewer detections than this and the median is too volatile (one short
+# character or punctuation box can swing it) — skip the gate, let OCR run.
+MIN_DETECTION_SAMPLE_SIZE = 5
 
 # Tracks IPs with a scan currently in-flight.
 _active_ips: set[str] = set()
@@ -57,6 +68,18 @@ def _evict_job_store() -> None:
         for _ in range(_JOB_STORE_EVICT):
             if _job_store:
                 _job_store.popitem(last=False)
+
+
+def _median_text_height(
+    detections: list[tuple[int, int, int, int]],
+) -> float | None:
+    """
+    Median height of MSER text-box detections, or None if there are too
+    few boxes for the median to be a reliable signal (MIN_DETECTION_SAMPLE_SIZE).
+    """
+    if len(detections) < MIN_DETECTION_SAMPLE_SIZE:
+        return None
+    return statistics.median(h for (_, _, _, h) in detections)
 
 
 def _run_scan_job(
@@ -93,6 +116,23 @@ def _run_scan_job(
             # detections are returned as raw coordinates so the frontend can draw
             # its own interactive overlay; the burned-in annotated image is unused.
             _, detections = detect_text_regions(cleaned)
+
+            median_height = _median_text_height(detections)
+            if median_height is not None and median_height < MIN_TEXT_HEIGHT_PX:
+                logger.warning(
+                    "Job %s rejected: RESOLUTION_TOO_LOW (median text height %.1fpx, n=%d)",
+                    job_id,
+                    median_height,
+                    len(detections),
+                )
+                _job_store[job_id] = {
+                    "status": "failed",
+                    "error": (
+                        "Text is too small to scan accurately. Please capture a "
+                        "higher-resolution image or move the camera closer to the document."
+                    ),
+                }
+                return
 
             text = extract_text(cleaned)
 

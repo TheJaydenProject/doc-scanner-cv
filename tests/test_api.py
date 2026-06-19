@@ -1,6 +1,8 @@
 import io
 import time
 
+from api.documents import MIN_TEXT_HEIGHT_PX, _median_text_height
+
 
 def test_rejects_missing_file(client):
     res = client.post("/api/documents/scan")
@@ -125,3 +127,21 @@ def test_async_job_resolves_complete_on_valid_image(client, document_image_bytes
         time.sleep(0.5)
 
     raise AssertionError("Job did not resolve within 20 seconds.")
+
+
+def test_median_text_height_returns_none_below_sample_size():
+    """Fewer than 5 boxes — median would be too volatile, so skip the gate."""
+    detections = [(0, 0, 5, h) for h in (10, 12, 14, 16)]
+    assert _median_text_height(detections) is None
+
+
+def test_median_text_height_computes_median_at_sample_size():
+    detections = [(0, 0, 5, h) for h in (10, 12, 14, 16, 18)]
+    assert _median_text_height(detections) == 14
+
+
+def test_median_text_height_flags_low_resolution():
+    detections = [(0, 0, 5, h) for h in (10, 12, 14, 16, 18)]
+    median = _median_text_height(detections)
+    assert median is not None
+    assert median < MIN_TEXT_HEIGHT_PX
