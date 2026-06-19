@@ -152,14 +152,40 @@ def binarize_handwritten(image: np.ndarray) -> np.ndarray:
 def remove_horizontal_lines(binary: np.ndarray) -> np.ndarray:
     """
     Erases ruled/feint lines (notebook or index-card rules) from a binarized
-    image before MSER/OCR see it. Targets only long, thin horizontal strokes —
-    a kernel this wide never matches real text characters or word connectors.
+    image before MSER/OCR see it. Uses HoughLinesP rather than a fixed
+    horizontal kernel — perspective warp residue and paper curl mean ruled
+    lines aren't pixel-perfect horizontals, and a 1-row-tall kernel only
+    matches a line that stays within that exact row for its full length.
+    Hough tolerates a +/-10 degree tilt.
+
+    threshold=250 and maxLineGap=0 are deliberately strict: a lower
+    threshold or a nonzero gap starts bridging the disconnected strokes of
+    handwritten words into false "lines" and erases the text itself (visually
+    confirmed against real notebook scans — text was largely wiped out at
+    threshold=80/maxLineGap=15). These settings only catch the genuinely
+    continuous runs that ruled lines produce.
     """
     inverted = cv2.bitwise_not(binary)
-    kernel_width = max(binary.shape[1] // 15, 1)
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 1))
-    detected_lines = cv2.morphologyEx(inverted, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
-    return cv2.bitwise_or(binary, detected_lines)
+    min_length = int(binary.shape[1] * 0.15)
+    lines = cv2.HoughLinesP(
+        inverted,
+        rho=1,
+        theta=np.pi / 180,
+        threshold=250,
+        minLineLength=min_length,
+        maxLineGap=0,
+    )
+
+    if lines is None:
+        return binary
+
+    cleaned = binary.copy()
+    for (x1, y1, x2, y2) in lines[:, 0]:
+        angle = abs(np.arctan2(y2 - y1, x2 - x1) * 180.0 / np.pi)
+        if angle < 10.0 or angle > 170.0:
+            cv2.line(cleaned, (x1, y1), (x2, y2), 255, thickness=3)
+
+    return cleaned
 
 
 def run_pipeline(image_bytes: bytes) -> tuple[np.ndarray, bool]:

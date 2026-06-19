@@ -5,6 +5,7 @@ from pipeline.scanner import (
     run_pipeline,
     binarize_printed,
     binarize_handwritten,
+    remove_horizontal_lines,
     _quad_area_ratio,
     ContourNotFoundError,
 )
@@ -72,3 +73,22 @@ def test_binarize_handwritten_output_only_contains_binary_values():
     result = binarize_handwritten(colour)
     unique_values = set(np.unique(result))
     assert unique_values.issubset({0, 255})
+
+
+def test_remove_horizontal_lines_erases_tilted_ruled_line():
+    # A continuous line tilted a few degrees off horizontal — the failure
+    # case a 1-row morphological kernel can't catch, but Hough can.
+    binary = np.full((60, 400), 255, dtype=np.uint8)
+    cv2.line(binary, (5, 30), (395, 25), 0, thickness=2)
+    cleaned = remove_horizontal_lines(binary)
+    assert cleaned[27, 200] == 255
+
+
+def test_remove_horizontal_lines_preserves_disconnected_text_strokes():
+    # Short, gapped dashes simulate handwritten glyphs roughly on one row.
+    # maxLineGap=0 must not bridge these into a fake "line" and erase them.
+    binary = np.full((60, 400), 255, dtype=np.uint8)
+    for x in range(20, 380, 12):
+        cv2.line(binary, (x, 30), (x + 6, 30), 0, thickness=2)
+    cleaned = remove_horizontal_lines(binary)
+    assert np.sum(cleaned == 0) == np.sum(binary == 0)
