@@ -153,7 +153,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 420px 1fr;
+  grid-template-columns: 35fr 65fr;
   gap: var(--space-5);
   padding: var(--space-5);
 }
