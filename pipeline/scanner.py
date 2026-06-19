@@ -150,46 +150,47 @@ def binarize_handwritten(image: np.ndarray) -> np.ndarray:
     )
 
 
-def remove_horizontal_lines(binary: np.ndarray) -> np.ndarray:
+def remove_ruled_lines(binary: np.ndarray, max_thickness: int = 8) -> np.ndarray:
     """
-    Erases ruled/feint lines (notebook or index-card rules) from a binarized
-    image before MSER/OCR see it.
+    Erases ruled lines (notebook/index-card rules) and vertical margin
+    borders from a binarized image before MSER/OCR see it.
 
-    Uses a morphological OPEN with a wide horizontal kernel rather than
-    HoughLinesP. The Hough approach required a continuous uninterrupted run
-    of >= 250 pixels, but handwritten letters sitting ON a ruled line break
-    it into short segments that all fall below that threshold — so the line
-    was never detected and Tesseract read the fragments as dashes and tildes.
+    A prior approach (remove_horizontal_lines) flagged lines via a
+    morphological OPEN that required a single row to contain an unbroken
+    run of ink >= 20% of the page width. Once a real ruled line is
+    interrupted by a full word of handwriting (not just letter-gaps), the
+    surviving fragments are far shorter than that floor, so most lines were
+    never detected at all — and it never looked for vertical structure
+    (margin/border lines), only horizontal.
 
-    A horizontal kernel of width = image_width // 5 (20 % of image width)
-    is selective: real ruled lines span ~100 % of the page width, so their
-    between-letter segments survive the opening. The widest single letter
-    stroke is at most 5–10 % of image width, so all text is erased from the
-    detection mask. Once the affected Y-rows are known, the entire row is
-    blanked — this also removes the segments hidden directly under letters.
+    Connected-component analysis sidesteps both problems: each blank
+    segment of a line forms its own component no matter how short, and
+    cv2.minAreaRect gives that segment's thickness along its own axis, so a
+    few pixels of perspective-warp skew don't inflate the measured
+    thickness the way an axis-aligned bounding box would. A component is
+    erased only if it's long relative to the page in its dominant direction
+    *and* thin in the perpendicular direction — a signature ordinary
+    letters/words never share, even joined cursive ones.
     """
     h, w = binary.shape
-    # 20 % of image width comfortably separates ruled lines (near 100 % wide)
-    # from the widest letter stroke (< 10 % wide). Floor at 30 px for tiny images.
-    kernel_length = max(w // 5, 30)
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_length, 1))
-
-    # MORPH_OPEN on the inverted image (ink = white) keeps only structures
-    # that are at least kernel_length pixels wide — i.e. ruled lines only.
     inverted = cv2.bitwise_not(binary)
-    detected = cv2.morphologyEx(
-        inverted, cv2.MORPH_OPEN, horizontal_kernel, iterations=2
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        inverted, connectivity=8
     )
 
-    # Find every row that contains a detected line pixel.
-    line_rows = np.where(detected.any(axis=1))[0]
-    if line_rows.size == 0:
-        return binary
-
     cleaned = binary.copy()
-    for y in line_rows:
-        # thickness=3 covers typical 1-2 px ruled lines plus any antialiasing.
-        cv2.line(cleaned, (0, int(y)), (w - 1, int(y)), 255, thickness=3)
+    for label in range(1, num_labels):
+        x, y, cw, ch, _ = stats[label]
+        is_horizontal = cw >= ch
+        # Horizontal rules span most of the page width; vertical margins
+        # span most of the page height — letters/words never do either.
+        min_length = w * 0.05 if is_horizontal else h * 0.3
+        if max(cw, ch) < min_length:
+            continue
+        component = (labels[y : y + ch, x : x + cw] == label).astype(np.uint8)
+        thickness = min(cv2.minAreaRect(cv2.findNonZero(component))[1])
+        if thickness <= max_thickness:
+            cleaned[labels == label] = 255
 
     return cleaned
 

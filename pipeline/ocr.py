@@ -47,11 +47,10 @@ def _clean_ocr_text(text: str) -> str:
     return "\n".join(cleaned)
 
 
-def extract_text(binarized_image: np.ndarray, doc_type: str = "handwritten") -> str:
-    # --psm 6 treats the input as a single uniform block of text, which fits
-    # a tightly-cropped handwritten note. Printed pages can span multiple
-    # paragraphs or columns, so --psm 3 (fully automatic page segmentation)
-    # performs significantly better there.
-    psm = "3" if doc_type == "printed" else "6"
-    raw_text = pytesseract.image_to_string(binarized_image, config=f"--psm {psm}")
+def extract_text(binarized_image: np.ndarray) -> str:
+    # --psm 3 (fully automatic page segmentation) lets Tesseract detect
+    # paragraphs, indentation, and isolated lines (date, subject, sign-off)
+    # on its own. Layout complexity is independent of handwritten vs.
+    # printed, so a single mode serves both document types.
+    raw_text = pytesseract.image_to_string(binarized_image, config="--psm 3")
     return _clean_ocr_text(raw_text)

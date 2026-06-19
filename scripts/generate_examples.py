@@ -12,7 +12,7 @@ from pipeline.scanner import (
     ContourNotFoundError,
     binarize_handwritten,
     binarize_printed,
-    remove_horizontal_lines,
+    remove_ruled_lines,
     run_pipeline,
 )
 
@@ -58,7 +58,7 @@ def generate_four_stage_examples() -> None:
 
             # Matches api/documents.py: line removal runs unconditionally on
             # the binarized image, regardless of document type.
-            cleaned = remove_horizontal_lines(binarized)
+            cleaned = remove_ruled_lines(binarized)
             cv2.imwrite(os.path.join(EXAMPLES_DIR, f"{base_name}_binarized.png"), cleaned)
 
             annotated, _ = detect_text_regions(cleaned)

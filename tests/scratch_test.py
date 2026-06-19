@@ -38,5 +38,5 @@ annotated, detections = detect_text_regions(binarized)
 cv2.imwrite(os.path.join(OUTPUT_DIR, "output_annotated.png"), annotated)
 print(f"Step 4: {len(detections)} text regions detected. {OUTPUT_DIR}/output_annotated.png written.")
 
-text = extract_text(binarized, doc_type=result["label"])
+text = extract_text(binarized)
 print(f"Step 4: extracted {len(text)} characters.")
