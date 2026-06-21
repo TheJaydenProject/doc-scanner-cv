@@ -4,6 +4,9 @@ import type { ScanResult } from "../types";
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_ATTEMPTS = 40;
+// Matches app.py's MAX_CONTENT_LENGTH — checked client-side so an oversized
+// file is rejected instantly instead of round-tripping to the server first.
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 // Matches the backend's resolution-gate message (api/documents.py) — this
 // error is deterministic on retry, so the file selection gets cleared
 // instead of just re-enabling the Scan button like other failures.
@@ -21,13 +24,25 @@ const scanDisabled = ref(true);
 
 function onFileChange(event: Event) {
   const target = event.target as HTMLInputElement;
-  if (target.files && target.files.length > 0) {
-    selectedFileName.value = target.files[0].name;
-    scanDisabled.value = false;
-  } else {
+  const file = target.files?.[0];
+
+  if (!file) {
     selectedFileName.value = "";
     scanDisabled.value = true;
+    return;
   }
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    error.value = `Selected file is ${sizeMb}MB — please choose an image under 20MB.`;
+    selectedFileName.value = "";
+    scanDisabled.value = true;
+    target.value = "";
+    return;
+  }
+
+  selectedFileName.value = file.name;
+  scanDisabled.value = false;
 }
 
 async function onScan() {
@@ -48,12 +63,28 @@ async function onScan() {
       method: "POST",
       body: formData,
     });
-    const data = await res.json();
+
+    let data: { error?: string; job_id?: string };
+    try {
+      data = await res.json();
+    } catch {
+      // Some failure responses (e.g. a 413 from Flask's MAX_CONTENT_LENGTH
+      // guard) come back as an HTML error page, not JSON — res.json() throws.
+      // That's a real server response, not a network failure, so it gets its
+      // own message instead of falling into the generic catch below.
+      showError(
+        res.status === 413
+          ? "File is too large. Please choose an image under 20MB."
+          : `Upload failed (server returned HTTP ${res.status}).`,
+      );
+      return;
+    }
+
     if (!res.ok) {
       showError(data.error ?? "Upload failed.");
       return;
     }
-    jobId = data.job_id;
+    jobId = data.job_id as string;
   } catch {
     showError("Network error. Could not reach the server.");
     return;
@@ -111,7 +142,7 @@ function showError(message: string) {
 <template>
   <section class="panel">
     <h2>Upload</h2>
-    <label for="file-input">Choose image (JPEG or PNG, max 2MB)</label>
+    <label for="file-input">Choose image (JPEG or PNG, max 20MB)</label>
 
     <input
       ref="fileInput"

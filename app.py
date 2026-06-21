@@ -7,8 +7,8 @@ def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", static_url_path="")
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///scans.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    # 2MB max. Stricter than default to protect VPS from large payload abuse.
-    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
+    # 20MB max. Stricter than default to protect VPS from large payload abuse.
+    app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 
     db.init_app(app)
     limiter.init_app(app)
