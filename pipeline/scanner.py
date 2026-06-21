@@ -152,7 +152,7 @@ def binarize_handwritten(image: np.ndarray) -> np.ndarray:
 
 def remove_ruled_lines(binary: np.ndarray, max_thickness: int = 8) -> np.ndarray:
     """
-    Erases ruled lines (notebook/index-card rules) and vertical margin
+    Erases ruled lines (notebook/index-card rules) and page-edge/margin
     borders from a binarized image before MSER/OCR see it.
 
     A prior approach (remove_horizontal_lines) flagged lines via a
@@ -163,14 +163,28 @@ def remove_ruled_lines(binary: np.ndarray, max_thickness: int = 8) -> np.ndarray
     never detected at all — and it never looked for vertical structure
     (margin/border lines), only horizontal.
 
-    Connected-component analysis sidesteps both problems: each blank
-    segment of a line forms its own component no matter how short, and
-    cv2.minAreaRect gives that segment's thickness along its own axis, so a
-    few pixels of perspective-warp skew don't inflate the measured
-    thickness the way an axis-aligned bounding box would. A component is
-    erased only if it's long relative to the page in its dominant direction
-    *and* thin in the perpendicular direction — a signature ordinary
-    letters/words never share, even joined cursive ones.
+    Connected-component analysis sidesteps that: each blank segment of a
+    line forms its own component no matter how short, and cv2.minAreaRect
+    gives that segment's thickness along its own axis, so a few pixels of
+    perspective-warp skew don't inflate the measured thickness the way an
+    axis-aligned bounding box would. A component is treated as a line when
+    it is thin in its minor axis *and* long in its major axis — a signature
+    ordinary letters/words never share, even joined cursive ones.
+
+    Two passes close the gaps that plain per-component analysis leaves:
+
+      1. Whole lines and page-spanning borders. The latter covers the case
+         a fixed thickness cap misses: a scan-edge shadow band that spans
+         ~all of one page dimension yet is far thicker than max_thickness.
+         It is still a border, never text, because no glyph spans the page.
+      2. Collinear stubs. Where text sits directly on a ruled line, the
+         line survives only as a short remnant out in the margin. Once
+         pass 1 has confirmed the page is ruled, such a remnant is erased
+         when it aligns (within max_thickness) with a confirmed line *or*
+         lies in the outer margin, where ruled paper carries no body text —
+         the signature that tells a line stub apart from an in-word hyphen.
+         Gating on confirmed rules keeps thin serifs near the edge of a
+         plain printed page (no rules) safe.
     """
     h, w = binary.shape
     inverted = cv2.bitwise_not(binary)
@@ -178,19 +192,61 @@ def remove_ruled_lines(binary: np.ndarray, max_thickness: int = 8) -> np.ndarray
         inverted, connectivity=8
     )
 
-    cleaned = binary.copy()
+    comps = []
     for label in range(1, num_labels):
         x, y, cw, ch, _ = stats[label]
-        is_horizontal = cw >= ch
-        # Horizontal rules span most of the page width; vertical margins
-        # span most of the page height — letters/words never do either.
-        min_length = w * 0.05 if is_horizontal else h * 0.3
-        if max(cw, ch) < min_length:
-            continue
         component = (labels[y : y + ch, x : x + cw] == label).astype(np.uint8)
-        thickness = min(cv2.minAreaRect(cv2.findNonZero(component))[1])
-        if thickness <= max_thickness:
-            cleaned[labels == label] = 255
+        rw, rh = cv2.minAreaRect(cv2.findNonZero(component))[1]
+        comps.append(
+            {
+                "label": label,
+                "x": x, "y": y, "cw": cw, "ch": ch,
+                "thickness": min(rw, rh),
+                "length": max(rw, rh),
+                "is_h": cw >= ch,
+                "cy": y + ch // 2,
+                "cx": x + cw // 2,
+            }
+        )
+
+    to_erase = set()
+    strong_rows = []  # center y of confirmed full-width horizontal rules
+
+    # Pass 1: whole rules (thin + long) and page-spanning borders (thick but
+    # far longer than they are wide, covering ~all of one page dimension).
+    for c in comps:
+        thin = c["thickness"] <= max_thickness
+        long_enough = c["length"] >= (w * 0.05 if c["is_h"] else h * 0.3)
+        spans = c["cw"] >= 0.85 * w if c["is_h"] else c["ch"] >= 0.85 * h
+        slender = c["length"] >= 12 * max(c["thickness"], 1)
+        if (thin and long_enough) or (spans and slender):
+            to_erase.add(c["label"])
+            if c["is_h"] and c["length"] >= w * 0.3:
+                strong_rows.append(c["cy"])
+
+    # Pass 2: collinear stubs. Only once the page is confirmed ruled (>= 3
+    # full rules) do we hunt remnants: a short thin horizontal fragment that
+    # either aligns with a confirmed rule or sits in the outer margin is the
+    # broken-off tail of a line text wrote over.
+    band = max(max_thickness, 1)
+    if len(strong_rows) >= 3:
+        rows = np.array(sorted(strong_rows))
+        for c in comps:
+            if (
+                c["label"] in to_erase
+                or not c["is_h"]
+                or c["thickness"] > max_thickness
+                or c["length"] >= w * 0.3
+            ):
+                continue
+            on_rule = np.min(np.abs(rows - c["cy"])) <= band
+            in_margin = c["cx"] < 0.12 * w or c["cx"] > 0.88 * w
+            if on_rule or in_margin:
+                to_erase.add(c["label"])
+
+    cleaned = binary.copy()
+    for label in to_erase:
+        cleaned[labels == label] = 255
 
     return cleaned
 

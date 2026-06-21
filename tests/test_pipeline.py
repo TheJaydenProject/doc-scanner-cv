@@ -115,3 +115,36 @@ def test_remove_ruled_lines_erases_vertical_margin_border():
     cv2.line(binary, (290, 5), (290, 395), 0, thickness=2)
     cleaned = remove_ruled_lines(binary)
     assert cleaned[200, 290] == 255
+
+
+def test_remove_ruled_lines_erases_thick_page_edge_band():
+    # A scan-shadow band along the page edge is far thicker than max_thickness
+    # but spans the full height; the page-spanning-border branch erases it
+    # where a fixed thickness cap alone would keep it.
+    binary = np.full((400, 300), 255, dtype=np.uint8)
+    cv2.rectangle(binary, (278, 0), (298, 399), 0, -1)  # 21px wide, full height
+    cleaned = remove_ruled_lines(binary)
+    assert cleaned[200, 288] == 255
+
+
+def test_remove_ruled_lines_erases_collinear_margin_stub():
+    # Three full-width rules confirm the page is ruled. A short fragment left
+    # behind on one of those rows (where text broke the line apart) is too
+    # short to be a rule on its own, but its alignment with a confirmed rule
+    # gives it away and it must be erased.
+    binary = np.full((200, 400), 255, dtype=np.uint8)
+    cv2.line(binary, (5, 40), (395, 40), 0, thickness=2)
+    cv2.line(binary, (5, 120), (395, 120), 0, thickness=2)
+    cv2.line(binary, (5, 80), (150, 80), 0, thickness=2)  # broken, still a strong rule
+    cv2.line(binary, (250, 80), (280, 80), 0, thickness=2)  # collinear stub, mid-page
+    cleaned = remove_ruled_lines(binary)
+    assert cleaned[80, 265] == 255
+
+
+def test_remove_ruled_lines_keeps_margin_strokes_without_rules():
+    # With no ruled lines on the page, the margin-stub heuristic must stay
+    # disarmed so thin glyph strokes near the page edge survive untouched.
+    binary = np.full((200, 400), 255, dtype=np.uint8)
+    cv2.line(binary, (5, 100), (18, 100), 0, thickness=2)  # 13px, below the length floor
+    cleaned = remove_ruled_lines(binary)
+    assert np.sum(cleaned == 0) == np.sum(binary == 0)

@@ -18,25 +18,21 @@ from pipeline.scanner import (
 
 EXAMPLES_DIR = "static/examples"
 INPUT_EXTENSIONS = (".jpg", ".png")
-TARGET_FILES = ["note1", "note3"]
 
 
-def find_original(base_name: str) -> str | None:
-    """Return the original image path for `base_name`, trying each supported extension."""
-    for ext in INPUT_EXTENSIONS:
-        candidate = os.path.join(EXAMPLES_DIR, f"{base_name}_original{ext}")
-        if os.path.exists(candidate):
-            return candidate
-    return None
+def find_originals() -> list[tuple[str, str]]:
+    """Return (base_name, path) for every `*_original.*` image in EXAMPLES_DIR."""
+    originals = []
+    for filename in sorted(os.listdir(EXAMPLES_DIR)):
+        for ext in INPUT_EXTENSIONS:
+            suffix = f"_original{ext}"
+            if filename.endswith(suffix):
+                originals.append((filename[: -len(suffix)], os.path.join(EXAMPLES_DIR, filename)))
+    return originals
 
 
 def generate_four_stage_examples() -> None:
-    for base_name in TARGET_FILES:
-        input_path = find_original(base_name)
-        if input_path is None:
-            print(f"SKIP: Original for {base_name} not found.")
-            continue
-
+    for base_name, input_path in find_originals():
         ext = os.path.splitext(input_path)[1]
 
         raw_path = os.path.join(EXAMPLES_DIR, f"{base_name}_raw{ext}")
