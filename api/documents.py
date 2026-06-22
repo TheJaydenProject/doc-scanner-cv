@@ -172,9 +172,10 @@ def _run_scan_job(
 
             # Best-effort OpenRouter (DeepSeek V4 Flash) cleanup of OCR spelling/punctuation/casing.
             # No-ops (returns text unchanged) if the key is unset or the call
-            # fails, so it never breaks a scan. All downstream counts/storage use
-            # the corrected text.
-            text = correct_ocr_text(text)
+            # fails, so it never breaks a scan. doc_type tailors the prompt to
+            # printed vs. handwritten register. All downstream counts/storage
+            # use the corrected text.
+            text = correct_ocr_text(text, doc_type["label"])
 
             def encode_png(image) -> str:
                 _, buffer = cv2.imencode(".png", image)

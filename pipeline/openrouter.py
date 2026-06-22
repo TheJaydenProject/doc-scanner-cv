@@ -13,18 +13,70 @@ _ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 # so cap the call well short of that; on timeout we fall back to the raw text.
 _TIMEOUT_S = 15
 
-_SYSTEM_PROMPT = (
-    "You are a specialized OCR correction engine. Your strict mandate is to fix "
-    "spelling, punctuation, and casing errors caused by poor OCR extraction. Do "
-    "not rewrite the text, do not alter the author's original tone or vocabulary, "
-    "and do not summarize. Output only the exact corrected text."
+_BASE_PROMPT = (
+    "You are a specialized OCR post-correction engine. You receive raw text "
+    "extracted by an OCR pipeline from a scanned document and your sole task is "
+    "to repair OCR-induced errors: misspelled words, dropped or doubled "
+    "letters, wrong punctuation, and inconsistent casing. "
+    "\n\n"
+    "Strict rules:\n"
+    "1. Never rewrite, paraphrase, summarize, reorder, or translate. Do not "
+    "change the author's word choice, sentence structure, tone, or meaning.\n"
+    "2. Never add commentary, a preamble, an explanation, or wrap the output "
+    "in quotes or markdown. Your entire response is the corrected text and "
+    "nothing else.\n"
+    "3. Preserve the original line breaks and paragraph structure exactly as "
+    "given — do not merge, split, or reflow lines.\n"
+    "4. Preserve numbers, dates, codes, and proper nouns exactly as written "
+    "unless they are clearly a misread of a different character (e.g. a "
+    "stray '0' that should be a comma) — do not 'correct' a real name, ID, "
+    "or figure into a more common dictionary word.\n"
+    "5. If a word is too garbled to confidently resolve, leave it as-is rather "
+    "than guess a replacement."
+)
+# classify_document() (pipeline/classifier.py) already determined this before
+# OCR ran, so the cleanup prompt can be told the register directly instead of
+# guessing it from the (possibly short or noisy) extracted text.
+_HANDWRITTEN_HINT = (
+    "\n\n"
+    "This text is from a handwritten note, letter, or journal entry. "
+    "Preserve informalities exactly as written: contractions (e.g. \"It's\", "
+    "\"you'll\"), casual punctuation like ellipses and dashes, sentence "
+    "fragments, and run-ons — these are the author's voice, not OCR errors. "
+    "Handwriting OCR commonly confuses these letter pairs/shapes; use "
+    "sentence context to pick the right one: a/o, e/c, u/v/n, m/n, rn/m, "
+    "cl/d, g/y, b/h, l/t. Capitalization in handwriting is often inconsistent "
+    "— normalize sentence starts, 'I', and proper nouns, but don't impose "
+    "formal capitalization the author clearly didn't intend elsewhere."
+)
+_PRINTED_HINT = (
+    "\n\n"
+    "This text is from a printed or typed document (e.g. a form, receipt, or "
+    "typed letter). Apply standard formal spelling, grammar-consistent "
+    "punctuation, and conventional capitalization. Printed-font OCR commonly "
+    "confuses these character pairs; use context to pick the right one: "
+    "0/O, 1/l/I, 5/S, 8/B, rn/m, cl/d, vv/w. Be conservative with anything "
+    "that looks like a deliberate field value (an account number, date, "
+    "amount, or code) — fix only an obvious character misread, never the "
+    "value's actual digits or format."
 )
 
 
-def correct_ocr_text(text: str) -> str:
+def _build_system_prompt(doc_type: str | None) -> str:
+    if doc_type == "handwritten":
+        return _BASE_PROMPT + _HANDWRITTEN_HINT
+    if doc_type == "printed":
+        return _BASE_PROMPT + _PRINTED_HINT
+    return _BASE_PROMPT
+
+
+def correct_ocr_text(text: str, doc_type: str | None = None) -> str:
     """
     Clean raw OCR output with DeepSeek V4 Flash (via OpenRouter): spelling,
     punctuation, and casing only, never a rewrite or summary.
+
+    doc_type ("printed" or "handwritten", from classify_document()) tailors
+    the system prompt to that register; omit it for the generic prompt.
 
     This is a best-effort enhancement. If the API key is unset, the text is
     empty, or the request fails for any reason (network, non-200, blocked or
@@ -43,7 +95,7 @@ def correct_ocr_text(text: str) -> str:
         {
             "model": _MODEL,
             "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": _build_system_prompt(doc_type)},
                 {"role": "user", "content": text},
             ],
             # Deterministic correction, not creative rewriting.
@@ -80,4 +132,8 @@ if __name__ == "__main__":
     assert correct_ocr_text("   ") == "   "
     os.environ.pop("OPENROUTER_API_KEY", None)
     assert correct_ocr_text("teh cat") == "teh cat"
+    # Each doc_type gets its own tailored hint; unknown/missing stays generic.
+    assert _build_system_prompt("handwritten") == _BASE_PROMPT + _HANDWRITTEN_HINT
+    assert _build_system_prompt("printed") == _BASE_PROMPT + _PRINTED_HINT
+    assert _build_system_prompt(None) == _BASE_PROMPT
     print("openrouter self-check OK")
