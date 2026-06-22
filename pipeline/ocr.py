@@ -131,6 +131,10 @@ def extract_text(image: np.ndarray) -> str:
     the natural grayscale gradient far better than a hard-binarized page.
     Returns cleaned text in reading order.
     """
-    detections = _get_reader().readtext(image, detail=1)
+    # batch_size > 1 groups detected text-region crops into fewer recognizer
+    # forward passes instead of one per region; on a multi-line scan this cuts
+    # wall-clock time noticeably even single-threaded (torch.set_num_threads(1)
+    # above caps intra-op threads, not how many crops one pass can hold).
+    detections = _get_reader().readtext(image, detail=1, batch_size=8)
     lines = _lines_in_reading_order(detections)
     return _clean_ocr_text("\n".join(lines))
