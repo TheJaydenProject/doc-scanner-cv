@@ -16,8 +16,22 @@ const RESOLUTION_ERROR_SIGNATURE = "too small to scan accurately";
 // after a fresh deploy, with no scan history yet).
 const DEFAULT_ESTIMATE_MS = 8000;
 const PROGRESS_TICK_MS = 150;
-// Never claim "done" from the local timer alone — only the poll result can do that.
-const PROGRESS_CAP_PERCENT = 95;
+// We can't know up front whether the server will upscale this scan (decided
+// after detection) or how long OCR will take, so we deliberately lean the
+// estimate long: better to rise gradually and finish early (snap to 100) than
+// to arrive early and stall. This is the main tuning knob — raise it if scans
+// still routinely overrun.
+const OVERESTIMATE_FACTOR = 2;
+// The linear phase rises to this by the estimated finish time; only the poll
+// result ever sets 100%, so the timer alone never claims completion.
+const PROGRESS_SOFT_CAP = 90;
+// If a scan still overruns the leaned estimate, the bar crawls asymptotically
+// from the soft cap toward this ceiling — it keeps inching up instead of
+// freezing, but never reaches 100%.
+const PROGRESS_CEILING = 99;
+// Time constant of that crawl: larger = slower approach. Also drives the
+// overrun ETA, which decays from ~this many seconds toward (but never to) zero.
+const PROGRESS_OVERRUN_TAU_MS = 8000;
 
 // The backend's average processing time is assumed to correspond to a scan of
 // roughly this upload size; the estimate is scaled linearly by how the actual
@@ -41,10 +55,9 @@ const progressPercent = ref(0);
 const secondsRemaining = ref(0);
 
 const progressLabel = computed(() => {
-  const base = `Processing… ${progressPercent.value}%`;
-  return secondsRemaining.value > 0
-    ? `${base} · ≈${secondsRemaining.value}s left`
-    : base;
+  // At completion the poll sets 100% / 0s; drop the "0s left" tail there.
+  if (progressPercent.value >= 100) return "Processing… 100%";
+  return `Processing… ${progressPercent.value}% · ≈${secondsRemaining.value}s left`;
 });
 
 // Average processing time from /metrics, before per-file size scaling.
@@ -72,7 +85,7 @@ function startProgressTimer(fileSizeBytes: number) {
     Math.max(fileSizeBytes / REFERENCE_FILE_SIZE_BYTES, MIN_SIZE_MULTIPLIER),
     MAX_SIZE_MULTIPLIER,
   );
-  estimatedDurationMs = baseAverageMs * sizeMultiplier;
+  estimatedDurationMs = baseAverageMs * sizeMultiplier * OVERESTIMATE_FACTOR;
 
   scanStartTime = Date.now();
   progressPercent.value = 0;
@@ -80,15 +93,26 @@ function startProgressTimer(fileSizeBytes: number) {
 
   progressTimer = setInterval(() => {
     const elapsed = Date.now() - scanStartTime;
-    const ratio = Math.min(elapsed / estimatedDurationMs, 1);
-    progressPercent.value = Math.min(
-      Math.round(ratio * 100),
-      PROGRESS_CAP_PERCENT,
-    );
-    secondsRemaining.value = Math.max(
-      0,
-      Math.ceil((estimatedDurationMs - elapsed) / 1000),
-    );
+    if (elapsed < estimatedDurationMs) {
+      // Linear phase: rise from 0 to the soft cap over the estimated duration.
+      const ratio = elapsed / estimatedDurationMs;
+      progressPercent.value = Math.round(ratio * PROGRESS_SOFT_CAP);
+      secondsRemaining.value = Math.ceil((estimatedDurationMs - elapsed) / 1000);
+    } else {
+      // Overrun phase: estimate was too low. Crawl asymptotically from the soft
+      // cap toward the ceiling — 1 - e^(-t/tau) approaches 1 but never reaches
+      // it, so the bar keeps inching up instead of freezing.
+      const overrun = elapsed - estimatedDurationMs;
+      const approach = 1 - Math.exp(-overrun / PROGRESS_OVERRUN_TAU_MS);
+      progressPercent.value = Math.round(
+        PROGRESS_SOFT_CAP + (PROGRESS_CEILING - PROGRESS_SOFT_CAP) * approach,
+      );
+      // Keep a moving ETA: the leftover time tau*(1-approach) decays from ~tau
+      // toward zero, clamped to 1s so a countdown is always shown rather than a
+      // frozen number or nothing.
+      const remainingMs = PROGRESS_OVERRUN_TAU_MS * (1 - approach);
+      secondsRemaining.value = Math.max(1, Math.ceil(remainingMs / 1000));
+    }
   }, PROGRESS_TICK_MS);
 }
 
