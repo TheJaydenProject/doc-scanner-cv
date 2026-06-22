@@ -27,16 +27,17 @@ const OVERESTIMATE_FACTOR = 2;
 // The linear phase rises to this by the estimated finish time; only the poll
 // result ever sets 100%, so the timer alone never claims completion.
 const PROGRESS_SOFT_CAP = 90;
-// If a scan still overruns the leaned estimate, the bar crawls asymptotically
-// from the soft cap toward this ceiling — it keeps inching up instead of
-// freezing, but never reaches 100%.
+// If a scan still overruns the leaned estimate, the bar crawls from the soft
+// cap toward this ceiling — it keeps inching up instead of freezing, but
+// never reaches 100%.
 const PROGRESS_CEILING = 99;
-// Time constant of that crawl: larger = slower approach. Also drives the
-// overrun ETA, which decays from ~this many seconds toward (but never to) zero.
-// Sized so the crawl stays visibly moving across the full POLL_MAX_ATTEMPTS
-// budget instead of saturating near PROGRESS_CEILING within the first ~25s of
-// overrun and then looking frozen for the rest of a long wait.
-const PROGRESS_OVERRUN_TAU_MS = 20000;
+// Overrun crawl uses overrun/(overrun+OVERRUN_STEP_MS) rather than an
+// exponential: a 1/x tail decays much slower than e^-x, so it keeps producing
+// visible whole-percent ticks for minutes into an overrun instead of
+// saturating near PROGRESS_CEILING within ~25s and then sitting frozen.
+// Also sizes the ETA's renewal chunk (see startProgressTimer) — same "how
+// big a step feels reasonable" question for both.
+const OVERRUN_STEP_MS = 15000;
 
 // The backend's average processing time is assumed to correspond to a scan of
 // roughly this upload size; the estimate is scaled linearly by how the actual
@@ -62,19 +63,19 @@ const secondsRemaining = ref(0);
 const progressLabel = computed(() => {
   // At completion the poll sets 100% / 0s; drop the "0s left" tail there.
   if (progressPercent.value >= 100) return "Processing… 100%";
-  // Overrun values carry one decimal (see startProgressTimer) so the label
-  // keeps visibly ticking up during a long wait instead of sitting at a
-  // rounded "99%" for the whole remainder.
-  const percentDisplay = Number.isInteger(progressPercent.value)
-    ? progressPercent.value
-    : progressPercent.value.toFixed(1);
-  return `Processing… ${percentDisplay}% · ≈${secondsRemaining.value}s left`;
+  return `Processing… ${progressPercent.value}% · ≈${secondsRemaining.value}s left`;
 });
 
 // Average processing time from /metrics, before per-file size scaling.
 let baseAverageMs = DEFAULT_ESTIMATE_MS;
 // Size-scaled estimate for the current scan; set in startProgressTimer().
 let estimatedDurationMs = DEFAULT_ESTIMATE_MS;
+// Independent of the percent curve below: the wall-clock moment the ETA
+// countdown is currently aimed at. Pushed back by OVERRUN_STEP_MS whenever
+// elapsed time catches up to it but the job is still running, so the
+// countdown always shows a real number ticking down instead of one that's
+// forced toward zero just because percent looks close to the ceiling.
+let etaTargetMs = DEFAULT_ESTIMATE_MS;
 let progressTimer: ReturnType<typeof setInterval> | null = null;
 let scanStartTime = 0;
 
@@ -97,6 +98,7 @@ function startProgressTimer(fileSizeBytes: number) {
     MAX_SIZE_MULTIPLIER,
   );
   estimatedDurationMs = baseAverageMs * sizeMultiplier * OVERESTIMATE_FACTOR;
+  etaTargetMs = estimatedDurationMs;
 
   scanStartTime = Date.now();
   progressPercent.value = 0;
@@ -104,29 +106,33 @@ function startProgressTimer(fileSizeBytes: number) {
 
   progressTimer = setInterval(() => {
     const elapsed = Date.now() - scanStartTime;
+
+    // Percent: whole numbers only, one curve, no phase-boundary jump.
     if (elapsed < estimatedDurationMs) {
       // Linear phase: rise from 0 to the soft cap over the estimated duration.
       const ratio = elapsed / estimatedDurationMs;
       progressPercent.value = Math.round(ratio * PROGRESS_SOFT_CAP);
-      secondsRemaining.value = Math.ceil((estimatedDurationMs - elapsed) / 1000);
     } else {
-      // Overrun phase: estimate was too low. Crawl asymptotically from the soft
-      // cap toward the ceiling — 1 - e^(-t/tau) approaches 1 but never reaches
-      // it, so the bar keeps inching up instead of freezing.
+      // Overrun phase: estimate was too low. overrun/(overrun+step) starts at
+      // 0 right where the linear phase left off (no jump) and keeps rising
+      // toward 1 — slowly enough to stay incremental well past a minute of
+      // overrun, but never actually reaching the ceiling.
       const overrun = elapsed - estimatedDurationMs;
-      const approach = 1 - Math.exp(-overrun / PROGRESS_OVERRUN_TAU_MS);
-      // One decimal here (vs. the linear phase's whole numbers) so the label
-      // keeps visibly advancing even as the curve flattens near the ceiling.
-      progressPercent.value =
-        Math.round(
-          (PROGRESS_SOFT_CAP + (PROGRESS_CEILING - PROGRESS_SOFT_CAP) * approach) * 10,
-        ) / 10;
-      // Keep a moving ETA: the leftover time tau*(1-approach) decays from ~tau
-      // toward zero, clamped to 1s so a countdown is always shown rather than a
-      // frozen number or nothing.
-      const remainingMs = PROGRESS_OVERRUN_TAU_MS * (1 - approach);
-      secondsRemaining.value = Math.max(1, Math.ceil(remainingMs / 1000));
+      const headroom = PROGRESS_CEILING - PROGRESS_SOFT_CAP;
+      progressPercent.value = Math.round(
+        PROGRESS_SOFT_CAP + headroom * (overrun / (overrun + OVERRUN_STEP_MS)),
+      );
     }
+
+    // ETA: a separate, honest countdown against etaTargetMs. Deliberately not
+    // derived from the percent curve above, so it never gets dragged toward
+    // "1s left" just because percent is sitting near the ceiling — instead it
+    // counts down normally and, if the job is still running when it would
+    // hit zero, renews with another real step rather than freezing at zero.
+    while (elapsed >= etaTargetMs) {
+      etaTargetMs += OVERRUN_STEP_MS;
+    }
+    secondsRemaining.value = Math.ceil((etaTargetMs - elapsed) / 1000);
   }, PROGRESS_TICK_MS);
 }
 
