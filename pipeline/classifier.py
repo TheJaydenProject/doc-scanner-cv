@@ -16,7 +16,14 @@ _INPUT_NAME: str = ""
 def _get_session(model_path: str = "models/doc_classifier.onnx") -> ort.InferenceSession:
     global _session, _INPUT_NAME
     if _session is None:
-        _session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        # Defaults to os.cpu_count() intra-op threads, which would let a single
+        # classify_document() call use every core on top of the 3-thread scan
+        # pool. Pin to 1, mirroring torch.set_num_threads(1) in pipeline/ocr.py.
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1
+        _session = ort.InferenceSession(
+            model_path, sess_options=options, providers=["CPUExecutionProvider"]
+        )
         _INPUT_NAME = _session.get_inputs()[0].name
     return _session
 
