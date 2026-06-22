@@ -554,7 +554,7 @@ canvas {
   color: var(--ink-secondary);
 }
 
-/* Scan-in-progress sweep indicator */
+/* Scan-in-progress determinate indicator */
 .scan-progress {
   display: flex;
   flex-direction: column;
@@ -563,7 +563,7 @@ canvas {
   color: var(--ink-secondary);
 }
 
-.sweep-track {
+.progress-track {
   position: relative;
   height: 2px;
   background: var(--border);
@@ -571,21 +571,13 @@ canvas {
   overflow: hidden;
 }
 
-.sweep-bar {
+.progress-bar {
   position: absolute;
   inset: 0;
-  width: 40%;
-  background: linear-gradient(90deg, transparent, var(--ink), transparent);
-  animation: sweep 1.2s ease-in-out infinite;
-}
-
-@keyframes sweep {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(250%);
-  }
+  width: 0;
+  background: var(--ink);
+  /* Eases the 150ms percent steps into a continuous fill rather than visible jumps. */
+  transition: width 0.15s linear;
 }
 
 /* Visually hidden but accessible file input */

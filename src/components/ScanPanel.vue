@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed, onMounted } from "vue";
 import type { ScanResult } from "../types";
 
 const POLL_INTERVAL_MS = 1500;
@@ -12,6 +12,22 @@ const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 // instead of just re-enabling the Scan button like other failures.
 const RESOLUTION_ERROR_SIGNATURE = "too small to scan accurately";
 
+// Used until /api/documents/metrics reports a real average (e.g. first scan
+// after a fresh deploy, with no scan history yet).
+const DEFAULT_ESTIMATE_MS = 8000;
+const PROGRESS_TICK_MS = 150;
+// Never claim "done" from the local timer alone — only the poll result can do that.
+const PROGRESS_CAP_PERCENT = 95;
+
+// The backend's average processing time is assumed to correspond to a scan of
+// roughly this upload size; the estimate is scaled linearly by how the actual
+// file compares. File bytes are only a rough proxy for OCR cost (which tracks
+// image resolution and text density, not raw size), so the multiplier is
+// clamped to keep an unusual file from producing a wild ETA.
+const REFERENCE_FILE_SIZE_BYTES = 3 * 1024 * 1024;
+const MIN_SIZE_MULTIPLIER = 0.5;
+const MAX_SIZE_MULTIPLIER = 2;
+
 const emit = defineEmits<{
   "scan-complete": [result: ScanResult, file: File];
 }>();
@@ -21,6 +37,67 @@ const selectedFileName = ref("");
 const loading = ref(false);
 const error = ref("");
 const scanDisabled = ref(true);
+const progressPercent = ref(0);
+const secondsRemaining = ref(0);
+
+const progressLabel = computed(() => {
+  const base = `Processing… ${progressPercent.value}%`;
+  return secondsRemaining.value > 0
+    ? `${base} · ≈${secondsRemaining.value}s left`
+    : base;
+});
+
+// Average processing time from /metrics, before per-file size scaling.
+let baseAverageMs = DEFAULT_ESTIMATE_MS;
+// Size-scaled estimate for the current scan; set in startProgressTimer().
+let estimatedDurationMs = DEFAULT_ESTIMATE_MS;
+let progressTimer: ReturnType<typeof setInterval> | null = null;
+let scanStartTime = 0;
+
+onMounted(async () => {
+  try {
+    const res = await fetch("/api/documents/metrics");
+    const data: { total_scans: number; avg_processing_time_ms: number } =
+      await res.json();
+    if (data.total_scans > 0 && data.avg_processing_time_ms > 0) {
+      baseAverageMs = data.avg_processing_time_ms;
+    }
+  } catch {
+    // Keep DEFAULT_ESTIMATE_MS — the progress bar still works, just less precisely.
+  }
+});
+
+function startProgressTimer(fileSizeBytes: number) {
+  const sizeMultiplier = Math.min(
+    Math.max(fileSizeBytes / REFERENCE_FILE_SIZE_BYTES, MIN_SIZE_MULTIPLIER),
+    MAX_SIZE_MULTIPLIER,
+  );
+  estimatedDurationMs = baseAverageMs * sizeMultiplier;
+
+  scanStartTime = Date.now();
+  progressPercent.value = 0;
+  secondsRemaining.value = Math.ceil(estimatedDurationMs / 1000);
+
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - scanStartTime;
+    const ratio = Math.min(elapsed / estimatedDurationMs, 1);
+    progressPercent.value = Math.min(
+      Math.round(ratio * 100),
+      PROGRESS_CAP_PERCENT,
+    );
+    secondsRemaining.value = Math.max(
+      0,
+      Math.ceil((estimatedDurationMs - elapsed) / 1000),
+    );
+  }, PROGRESS_TICK_MS);
+}
+
+function stopProgressTimer() {
+  if (progressTimer !== null) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+}
 
 function onFileChange(event: Event) {
   const target = event.target as HTMLInputElement;
@@ -52,6 +129,7 @@ async function onScan() {
   loading.value = true;
   error.value = "";
   scanDisabled.value = true;
+  startProgressTimer(file.size);
 
   const formData = new FormData();
   formData.append("file", file);
@@ -111,9 +189,14 @@ async function pollJob(jobId: string, file: File): Promise<void> {
 
       if (job.status === "complete") {
         clearInterval(interval);
-        loading.value = false;
-        scanDisabled.value = false;
-        emit("scan-complete", job.result as ScanResult, file);
+        stopProgressTimer();
+        progressPercent.value = 100;
+        secondsRemaining.value = 0;
+        setTimeout(() => {
+          loading.value = false;
+          scanDisabled.value = false;
+          emit("scan-complete", job.result as ScanResult, file);
+        }, 200);
       } else if (job.status === "failed") {
         clearInterval(interval);
         showError(job.error ?? "Processing failed.");
@@ -126,6 +209,7 @@ async function pollJob(jobId: string, file: File): Promise<void> {
 }
 
 function showError(message: string) {
+  stopProgressTimer();
   loading.value = false;
   error.value = message;
 
@@ -162,9 +246,9 @@ function showError(message: string) {
 
     <button id="scan-btn" :disabled="scanDisabled" @click="onScan">Scan Document</button>
     <div v-if="loading" class="scan-progress" id="loading" role="status" aria-live="polite">
-      <span>Processing…</span>
-      <div class="sweep-track">
-        <div class="sweep-bar"></div>
+      <span>{{ progressLabel }}</span>
+      <div class="progress-track">
+        <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
       </div>
     </div>
     <p v-if="error" class="error" id="error-msg" role="alert">
