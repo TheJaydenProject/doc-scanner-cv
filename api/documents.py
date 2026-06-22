@@ -76,6 +76,11 @@ def _evict_job_store() -> None:
                 _job_store.popitem(last=False)
 
 
+def _is_cancelled(job_id: str) -> bool:
+    job = _job_store.get(job_id)
+    return job is not None and job.get("status") == "cancelled"
+
+
 def _median_text_height(
     detections: list[tuple[int, int, int, int]],
 ) -> float | None:
@@ -153,7 +158,17 @@ def _run_scan_job(
                 )
                 clean_image = upscale(clean_image)
 
+            # The frontend gives up polling after a fixed budget and calls
+            # DELETE /jobs/<id> when it does; checking here before the two
+            # most expensive remaining stages stops a now-abandoned job from
+            # burning more CPU/network than it has to.
+            if _is_cancelled(job_id):
+                return
+
             text = extract_text(clean_image)
+
+            if _is_cancelled(job_id):
+                return
 
             # Best-effort OpenRouter (DeepSeek V4 Flash) cleanup of OCR spelling/punctuation/casing.
             # No-ops (returns text unchanged) if the key is unset or the call
@@ -262,6 +277,20 @@ def get_job(job_id: str):
         return jsonify({"error": "Job not found."}), 404
 
     return jsonify(job), 200
+
+
+@documents_bp.route("/jobs/<job_id>", methods=["DELETE"])
+def cancel_job(job_id: str):
+    """
+    Best-effort cancellation: the frontend calls this when it gives up
+    polling. Only flips a still-processing job to "cancelled" so
+    _run_scan_job can bail at its next checkpoint; a job that already
+    finished is left alone so this can never clobber a real result.
+    """
+    job = _job_store.get(job_id)
+    if job is not None and job.get("status") == "processing":
+        job["status"] = "cancelled"
+    return jsonify({"status": "ok"}), 200
 
 
 @documents_bp.route("/history", methods=["GET"])

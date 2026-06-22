@@ -3,7 +3,9 @@ import { ref, computed, onMounted } from "vue";
 import type { ScanResult } from "../types";
 
 const POLL_INTERVAL_MS = 1500;
-const POLL_MAX_ATTEMPTS = 40;
+// 120s budget (was 60s) — the VPS's CPU-only OCR routinely overruns the old
+// budget on larger/handwritten scans, which killed otherwise-successful jobs.
+const POLL_MAX_ATTEMPTS = 80;
 // Matches app.py's MAX_CONTENT_LENGTH — checked client-side so an oversized
 // file is rejected instantly instead of round-tripping to the server first.
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
@@ -31,7 +33,10 @@ const PROGRESS_SOFT_CAP = 90;
 const PROGRESS_CEILING = 99;
 // Time constant of that crawl: larger = slower approach. Also drives the
 // overrun ETA, which decays from ~this many seconds toward (but never to) zero.
-const PROGRESS_OVERRUN_TAU_MS = 8000;
+// Sized so the crawl stays visibly moving across the full POLL_MAX_ATTEMPTS
+// budget instead of saturating near PROGRESS_CEILING within the first ~25s of
+// overrun and then looking frozen for the rest of a long wait.
+const PROGRESS_OVERRUN_TAU_MS = 20000;
 
 // The backend's average processing time is assumed to correspond to a scan of
 // roughly this upload size; the estimate is scaled linearly by how the actual
@@ -57,7 +62,13 @@ const secondsRemaining = ref(0);
 const progressLabel = computed(() => {
   // At completion the poll sets 100% / 0s; drop the "0s left" tail there.
   if (progressPercent.value >= 100) return "Processing… 100%";
-  return `Processing… ${progressPercent.value}% · ≈${secondsRemaining.value}s left`;
+  // Overrun values carry one decimal (see startProgressTimer) so the label
+  // keeps visibly ticking up during a long wait instead of sitting at a
+  // rounded "99%" for the whole remainder.
+  const percentDisplay = Number.isInteger(progressPercent.value)
+    ? progressPercent.value
+    : progressPercent.value.toFixed(1);
+  return `Processing… ${percentDisplay}% · ≈${secondsRemaining.value}s left`;
 });
 
 // Average processing time from /metrics, before per-file size scaling.
@@ -104,9 +115,12 @@ function startProgressTimer(fileSizeBytes: number) {
       // it, so the bar keeps inching up instead of freezing.
       const overrun = elapsed - estimatedDurationMs;
       const approach = 1 - Math.exp(-overrun / PROGRESS_OVERRUN_TAU_MS);
-      progressPercent.value = Math.round(
-        PROGRESS_SOFT_CAP + (PROGRESS_CEILING - PROGRESS_SOFT_CAP) * approach,
-      );
+      // One decimal here (vs. the linear phase's whole numbers) so the label
+      // keeps visibly advancing even as the curve flattens near the ceiling.
+      progressPercent.value =
+        Math.round(
+          (PROGRESS_SOFT_CAP + (PROGRESS_CEILING - PROGRESS_SOFT_CAP) * approach) * 10,
+        ) / 10;
       // Keep a moving ETA: the leftover time tau*(1-approach) decays from ~tau
       // toward zero, clamped to 1s so a countdown is always shown rather than a
       // frozen number or nothing.
@@ -195,6 +209,13 @@ async function onScan() {
   await pollJob(jobId, file);
 }
 
+function cancelJob(jobId: string) {
+  // Fire-and-forget: lets the backend stop an abandoned job at its next
+  // checkpoint instead of burning CPU/network to a result no one is waiting
+  // for. Best-effort — a failed cancel just means the job runs to completion.
+  fetch(`/api/documents/jobs/${jobId}`, { method: "DELETE" }).catch(() => {});
+}
+
 async function pollJob(jobId: string, file: File): Promise<void> {
   let attempts = 0;
 
@@ -203,6 +224,7 @@ async function pollJob(jobId: string, file: File): Promise<void> {
 
     if (attempts > POLL_MAX_ATTEMPTS) {
       clearInterval(interval);
+      cancelJob(jobId);
       showError("Processing timed out. Please try again.");
       return;
     }

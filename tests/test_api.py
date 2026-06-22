@@ -1,7 +1,7 @@
 import io
 import time
 
-from api.documents import MIN_TEXT_HEIGHT_PX, _median_text_height
+from api.documents import MIN_TEXT_HEIGHT_PX, _job_store, _median_text_height
 
 
 def test_rejects_missing_file(client):
@@ -126,6 +126,26 @@ def test_async_job_resolves_complete_on_valid_image(client, document_image_bytes
         time.sleep(0.5)
 
     raise AssertionError("Job did not resolve within 20 seconds.")
+
+
+def test_cancel_marks_processing_job_cancelled(client):
+    _job_store["job-x"] = {"status": "processing"}
+    res = client.delete("/api/documents/jobs/job-x")
+    assert res.status_code == 200
+    assert _job_store["job-x"]["status"] == "cancelled"
+
+
+def test_cancel_does_not_clobber_finished_job(client):
+    """A job that already completed/failed must never be overwritten by a late cancel."""
+    _job_store["job-y"] = {"status": "complete", "result": {"text": "done"}}
+    res = client.delete("/api/documents/jobs/job-y")
+    assert res.status_code == 200
+    assert _job_store["job-y"]["status"] == "complete"
+
+
+def test_cancel_unknown_job_is_a_noop(client):
+    res = client.delete("/api/documents/jobs/does-not-exist")
+    assert res.status_code == 200
 
 
 def test_median_text_height_returns_none_below_sample_size():
