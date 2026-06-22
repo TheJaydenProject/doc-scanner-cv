@@ -33,10 +33,11 @@ else:
 cv2.imwrite(os.path.join(OUTPUT_DIR, "output.png"), binarized)
 print(f"Step 3: {OUTPUT_DIR}/output.png written.")
 
-# Step 4 — detector + OCR
+# Step 4: detector (MSER, on the cleaned binarized image), then OCR
 annotated, detections = detect_text_regions(binarized)
 cv2.imwrite(os.path.join(OUTPUT_DIR, "output_annotated.png"), annotated)
 print(f"Step 4: {len(detections)} text regions detected. {OUTPUT_DIR}/output_annotated.png written.")
 
-text = extract_text(binarized)
+# OCR reads the warped, non-binarized image (migrate-plan D2).
+text = extract_text(clean_image)
 print(f"Step 4: extracted {len(text)} characters.")

@@ -55,6 +55,10 @@ repomix-output.xml
 # Flask instance folder
 instance/
 
+# EasyOCR model weights, fetched during the Docker build (see Dockerfile and
+# README "OCR model weights"), not committed to keep them out of git history.
+models/easyocr/
+
 # Generated pipeline output
 output/
 test_images/

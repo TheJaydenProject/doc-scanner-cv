@@ -1,0 +1,4 @@
+# Always built fresh by scripts/fetch_ocr_weights.sh during the image build
+# (see Dockerfile). Excluded here so a local developer's already-fetched
+# copy can never silently mask the same build-time fetch CI/deploy relies on.
+models/easyocr/

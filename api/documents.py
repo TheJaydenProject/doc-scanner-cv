@@ -108,13 +108,12 @@ def _run_scan_job(
             else:
                 binarized = binarize_handwritten(clean_image)
 
-            # Ruled lines confuse both MSER and Tesseract — strip them before
-            # detection/OCR, but keep the original `binarized` for display so
-            # the Binarized/Detected stage images still show the real scan.
+            # Ruled lines confuse MSER, so strip them before detection. The
+            # binarize -> remove_ruled_lines -> MSER chain now serves only the
+            # resolution gate and the detection-count stat; OCR reads the
+            # non-binarized clean_image directly (migrate-plan D2/D3).
             cleaned = remove_ruled_lines(binarized)
 
-            # detections are returned as raw coordinates so the frontend can draw
-            # its own interactive overlay; the burned-in annotated image is unused.
             _, detections = detect_text_regions(cleaned)
 
             median_height = _median_text_height(detections)
@@ -134,14 +133,13 @@ def _run_scan_job(
                 }
                 return
 
-            text = extract_text(cleaned)
+            text = extract_text(clean_image)
 
             def encode_png(image) -> str:
                 _, buffer = cv2.imencode(".png", image)
                 return base64.b64encode(buffer).decode("utf-8")
 
             warped_image_b64 = encode_png(clean_image)
-            binarized_image_b64 = encode_png(binarized)
 
             elapsed_ms = int((time.time() - start) * 1000)
 
@@ -162,8 +160,6 @@ def _run_scan_job(
                     "word_count": len(text.split()),
                     "processing_time_ms": elapsed_ms,
                     "warped_image_b64": warped_image_b64,
-                    "binarized_image_b64": binarized_image_b64,
-                    "detections": detections,
                     "detection_count": len(detections),
                     "doc_type": doc_type["label"],
                     "doc_type_confidence": doc_type["confidence"],

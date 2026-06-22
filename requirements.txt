@@ -1,14 +1,15 @@
+# PyTorch CPU wheels (torch/torchvision +cpu local-version tags live only here).
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 flask==3.1.3
 flask-sqlalchemy==3.1.1
 flask-limiter==4.1.1
-opencv-python==4.13.0.92
-pytesseract==0.3.13
+opencv-python-headless==4.13.0.92
+easyocr==1.7.2
+torch==2.12.1+cpu
+torchvision==0.27.1+cpu
 pytest==9.1.0
 pillow==12.1.1
 gunicorn==26.0.0
 onnxruntime==1.24.4
 numpy==2.4.4
-
-# Run once locally to export models/doc_classifier.onnx, then uninstall.
-# Not needed at runtime — excluded from Docker image.
-# pip install torch==2.12.1 torchvision==0.27.1

@@ -17,9 +17,9 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
 4. **Perspective transform**: Only run when the boundary passes validation. Corner points are sorted into `[top-left, top-right, bottom-right, bottom-left]` order using per-point coordinate sums and differences. `getPerspectiveTransform` and `warpPerspective` produce a flat, axis-aligned crop, then a symmetric 2.5% inset crop removes the binding/shadow sliver left at the contour edge.
 5. **Document classification**: Runs on the clean image (warped, or the original frame if the warp was skipped) before any binarization. A bright-pixel heuristic checks for flat digital documents directly — if over 85% of pixels exceed luminance 240, the image is classified `printed` immediately, bypassing the ONNX model. Otherwise, a MobileNetV2 ONNX model (opset 18) classifies the image as `printed`, `handwritten`, or `mixed`. The `InferenceSession` is loaded once per process and reused across all requests to avoid the 100-300ms initialization cost.
 6. **Binarize**: Branches by predicted type. `printed` uses Otsu's threshold (predictable bimodal contrast on flat ink); `handwritten`/`mixed` use adaptive Gaussian thresholding on the LAB lightness channel (block size 51, C=15), which tolerates uneven lighting and colored backgrounds better. Connected-component analysis then erases ruled/feint notebook lines and vertical margin borders: every blank line segment forms its own component regardless of length, and a component is erased only if it's long relative to the page in its dominant direction *and* thin in the perpendicular direction — a signature ordinary letters and joined cursive never share. (An earlier kernel/morphological approach required an unbroken ink run across ~20% of the page width, which missed lines broken by handwriting.)
-7. **Text region detection**: MSER runs on the binarized image. Bounding boxes under 100 px² are discarded as noise, along with regions with a width:height ratio ≥ 15:1 or height ≤ 8px — both are signatures of ruled-line fragments, not glyphs. Detected regions are returned as raw coordinates for the frontend to draw its own overlay.
-8. **Resolution gate**: If MSER returned at least 5 boxes, their median height is computed. Below 5 boxes the sample is too volatile to judge (a single short character can skew it), so the gate is skipped and OCR proceeds as normal. Otherwise, a median under 15px means the source photo's text is too small for Tesseract to read reliably — the job is rejected here, before the expensive OCR pass, with a friendly message asking the user to recapture at higher resolution or move the camera closer.
-9. **OCR**: pytesseract extracts text from the binarized image using a page segmentation mode chosen by document type — PSM 3 (fully automatic page segmentation) for `printed`, which handles multi-paragraph layouts; PSM 6 (single uniform text block) for `handwritten`/`mixed`, which fits a tightly-cropped note. The result, character count, word count, processing time, and both clean/binarized images are persisted to SQLite and returned to the client.
+7. **Text region detection**: MSER runs on the binarized, line-stripped image. Bounding boxes under 100 px² are discarded as noise, along with regions with a width:height ratio ≥ 15:1 or height ≤ 8px, both signatures of ruled-line fragments rather than glyphs. The binarize → line-removal → MSER chain exists solely to power the resolution gate (below) and a text-region count returned to the client; OCR itself never sees a binarized pixel.
+8. **Resolution gate**: If MSER returned at least 5 boxes, their median height is computed. Below 5 boxes the sample is too volatile to judge (a single short character can skew it), so the gate is skipped and OCR proceeds as normal. Otherwise, a median under 15px means the source photo's text is too small to read reliably, so the job is rejected here, before the expensive OCR pass, with a friendly message asking the user to recapture at higher resolution or move the camera closer.
+9. **OCR**: EasyOCR (CRAFT text detector + CRNN recognizer, CPU-only) reads the warped, **non-binarized** image: its CNNs recover far more from the natural grayscale gradient than from a hard-binarized page, where surviving ruled lines fuse into the glyphs and collapse recognition. Detected word/phrase boxes are regrouped into reading order (clustered into rows by vertical centre, ordered left-to-right within each row), then a light post-pass strips ruled-line artifacts (leading/trailing dashes, intra-word underscores). The model weights are not committed to the repository; they are fetched at Docker build time and loaded with downloads disabled at runtime, so the running container never phones home (see "OCR model weights" below). The result, character count, word count, processing time, and the clean warped image are persisted to SQLite and returned to the client.
 
 ---
 
@@ -44,11 +44,11 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
       |
   [Resolution gate] median box height < 15px across >=5 boxes -> reject before OCR
       |
-  [OCR]             pytesseract, psm 3 (printed) | psm 6 (handwritten | mixed) -> extracted text
+  [OCR]             EasyOCR (CRAFT + CRNN, CPU) on the warped image -> reading-order reconstruction -> extracted text
       |
   [SQLite]          ScanRecord (char_count, word_count, processing_time_ms)
       |
-  [Response]        job_id -> poll -> { text, warped_image_b64, binarized_image_b64, detections, doc_type, doc_type_source, ... }
+  [Response]        job_id -> poll -> { text, warped_image_b64, detection_count, doc_type, doc_type_source, ... }
 
 Flask API           Flask + Gunicorn (1 worker, 3 concurrent scan threads)
 Frontend            Vue 3 SPA (ScanPanel, ResultPanel, Dashboard with Chart.js)
@@ -62,13 +62,14 @@ CI/CD               GitHub Actions: lint + type-check + test on push/PR -> auto-
 
 | Component | Library | Version |
 |-----------|---------|---------|
-| Language | Python | 3.11 |
+| Language | Python | 3.12 |
 | Web framework | Flask | 3.1.3 |
 | ORM | Flask-SQLAlchemy | 3.1.1 |
 | Rate limiting | Flask-Limiter | 4.1.1 |
-| Computer vision | OpenCV | 4.13.0 |
+| Computer vision | OpenCV (headless) | 4.13.0 |
 | ONNX inference | onnxruntime | 1.24.4 |
-| OCR | pytesseract + Tesseract | 0.3.13 |
+| OCR | EasyOCR (CRAFT + CRNN) | 1.7.2 |
+| Deep learning runtime | PyTorch (CPU) | 2.12.1 |
 | Image processing | Pillow | 12.1.1 |
 | WSGI server | Gunicorn | 26.0.0 |
 | Numerical | NumPy | 2.4.4 |
@@ -82,27 +83,54 @@ CI/CD               GitHub Actions: lint + type-check + test on push/PR -> auto-
 
 ## Prerequisites
 
-- Python 3.11 or later
+- Python 3.12 or later
 - Node.js 20 or later and npm
-- Tesseract OCR (not required when running via Docker)
 - Docker and Docker Compose (for containerized deployment)
 
 ```bash
-python --version     # must be 3.11+
+python --version     # must be 3.12+
 node --version       # must be 20+
-tesseract --version
 docker --version
 ```
 
-Install Tesseract system dependencies:
+The OCR engine (EasyOCR) needs no system package, but its model weights must be
+present on disk before the app starts (see "OCR model weights" below). When running
+outside Docker on Linux, OpenCV also needs two system libraries:
 
 ```bash
-# Ubuntu / Debian
-sudo apt-get install tesseract-ocr libgl1 libglib2.0-0
-
-# macOS
-brew install tesseract
+# Ubuntu / Debian (Linux only; not needed on macOS/Windows or via Docker)
+sudo apt-get install libgl1 libglib2.0-0
 ```
+
+---
+
+## OCR model weights
+
+EasyOCR needs two model files at runtime: the CRAFT text detector (`craft_mlt_25k.pth`,
+~79 MB) and the English CRNN recognizer (`english_g2.pth`, ~14 MB). These are **not
+committed to the repository**, both to keep ~93 MB of binary weights out of git
+history and because they are a fixed, versioned external artifact rather than project
+source. `pipeline/ocr.py` loads them with `download_enabled=False`, so the running
+container never reaches out to the network on a request; the weights must already be
+on disk under `models/easyocr/`.
+
+`scripts/fetch_ocr_weights.sh` fetches both files from EasyOCR's own release assets
+(the same URLs `easyocr.Reader(download_enabled=True)` would use internally) and
+unzips them into `models/easyocr/`. It runs automatically:
+
+- during the Docker build (`Dockerfile`), so the built image always ships with weights
+- in CI (`.github/workflows/deploy.yml`, `backend-check`), before the test suite runs,
+  since `app.py` pre-warms the reader at `create_app()` time
+
+For local development outside Docker, run it once manually:
+
+```bash
+bash scripts/fetch_ocr_weights.sh
+```
+
+Sources:
+- detector: https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip
+- recognizer: https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip
 
 ---
 
@@ -317,7 +345,7 @@ pytest tests/ -v
 - [x] Flat digital document handling: boundary-ratio check skips the perspective warp on implausible contours, a bright-pixel heuristic classifies flat documents as `printed` without the untrained ONNX head, and OCR page segmentation mode is chosen by document type
 - [x] Connected-component ruled-line erasure to prevent OCR/MSER artifacts on ruled paper, tolerant of the slight tilt left by perspective warp and paper curl (replaced an earlier kernel/morphological approach that missed lines broken by handwriting)
 - [x] Mobile-responsive layout for the Vue SPA interface
-- [x] Pre-OCR resolution gate — rejects scans whose median MSER text-box height falls below 30px (minimum 5-box sample to avoid false positives on sparse pages), saving a Tesseract pass on unreadable low-resolution uploads
+- [x] Pre-OCR resolution gate — rejects scans whose median MSER text-box height falls below 30px (minimum 5-box sample to avoid false positives on sparse pages), saving an OCR pass on unreadable low-resolution uploads
 - [x] GitHub Actions CI/CD — lint, type-check, and test on every push/PR; auto-deploys to the VPS via SSH on push to `main`
 
 ---

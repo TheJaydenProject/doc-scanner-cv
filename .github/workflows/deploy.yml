@@ -51,19 +51,26 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
-      - name: Install system deps required by OpenCV and Tesseract
+      - name: Install system deps required by OpenCV and the weight fetch
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            tesseract-ocr \
             libgl1 \
-            libglib2.0-0
+            libglib2.0-0 \
+            unzip
 
       - name: Install Python dependencies
+        # requirements.txt carries the --extra-index-url for the torch +cpu wheels.
         run: pip install -r requirements.txt
+
+      - name: Fetch EasyOCR model weights
+        # Not committed to git (see README "OCR model weights"); app.py's
+        # pre-warm needs them on disk before create_app() succeeds, so this
+        # must run before any test that imports the app.
+        run: bash scripts/fetch_ocr_weights.sh
 
       - name: Ruff lint
         # Ruff is not in requirements.txt because it's a dev-only tool.
@@ -104,7 +111,9 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           # models/ is committed and must be included — ONNX runtime needs both
           # doc_classifier.onnx and doc_classifier.onnx.data at runtime.
-          source: "api,app.py,models.py,models,pipeline,requirements.txt,static,Dockerfile,docker-compose.yml,package.json,package-lock.json,src,biome.json,tsconfig.json,vite.config.ts,index.html"
+          # scripts/ must be included: the Dockerfile's EasyOCR weight fetch
+          # (COPY scripts/fetch_ocr_weights.sh .) needs it on the VPS to build.
+          source: "api,app.py,models.py,models,pipeline,scripts,requirements.txt,static,Dockerfile,docker-compose.yml,package.json,package-lock.json,src,biome.json,tsconfig.json,vite.config.ts,index.html"
           target: "/home/${{ secrets.SSH_USER }}/deploy_staging_doc_scanner"
           strip_components: 0
 
