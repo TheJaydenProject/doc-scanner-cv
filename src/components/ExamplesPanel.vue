@@ -9,7 +9,7 @@ interface Example {
 }
 
 const examples: Example[] = [
-  { id: "note1", label: "Handwritten Note", originalExt: "jpg" },
+  { id: "note2", label: "Handwritten Note", originalExt: "jpg" },
   { id: "note3", label: "Printed Document", originalExt: "png" },
 ];
 
@@ -34,7 +34,8 @@ function openLightbox(src: string) {
     <h2>Examples</h2>
     <p class="section-desc">
       Real scans of handwritten and printed documents processed through the
-      pipeline.
+      pipeline. OCR reads the warped image directly; binarization and
+      detection power the resolution gate, not text extraction.
     </p>
 
     <div class="example-grid">
