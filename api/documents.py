@@ -24,6 +24,7 @@ from pipeline.scanner import (
     remove_ruled_lines,
     run_pipeline,
 )
+from pipeline.superres import upscale
 
 documents_bp = Blueprint("documents", __name__)
 
@@ -39,9 +40,13 @@ executor = ThreadPoolExecutor(max_workers=3)
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 _MAX_CONCURRENT_GLOBAL = 3
 
-# Below this median MSER text-box height, OCR accuracy degrades sharply,
-# so reject the scan instead of spending an OCR pass on it.
-MIN_TEXT_HEIGHT_PX = 15
+# Below this median MSER text-box height, OCR accuracy degrades sharply, so the
+# scan is routed through FSRCNN super-resolution before OCR rather than read at
+# native resolution (see pipeline/superres.py).
+MIN_TEXT_HEIGHT_PX = 30
+# Below this, even 3x upscaling can't reach a legible size (3x*8 = 24px is the
+# practical floor; sub-8px text super-resolves to mush), so still reject outright.
+UPSCALE_FLOOR_PX = 8
 # Fewer detections than this and the median is too volatile (one short
 # character or punctuation box can swing it) — skip the gate, let OCR run.
 MIN_DETECTION_SAMPLE_SIZE = 5
@@ -117,7 +122,7 @@ def _run_scan_job(
             _, detections = detect_text_regions(cleaned)
 
             median_height = _median_text_height(detections)
-            if median_height is not None and median_height < MIN_TEXT_HEIGHT_PX:
+            if median_height is not None and median_height < UPSCALE_FLOOR_PX:
                 logger.warning(
                     "Job %s rejected: RESOLUTION_TOO_LOW (median text height %.1fpx, n=%d)",
                     job_id,
@@ -132,6 +137,20 @@ def _run_scan_job(
                     ),
                 }
                 return
+
+            # Small-but-recoverable text: super-resolve the whole warped frame so
+            # EasyOCR's detector/recognizer read sharper glyphs. upscale() no-ops on
+            # images already large enough (its own memory guard), so this is safe to
+            # call whenever the gate trips. detection_count below stays the
+            # pre-upscale count — it's only a stat, not used downstream.
+            if median_height is not None and median_height < MIN_TEXT_HEIGHT_PX:
+                logger.info(
+                    "Job %s: upscaling (median text height %.1fpx < %dpx)",
+                    job_id,
+                    median_height,
+                    MIN_TEXT_HEIGHT_PX,
+                )
+                clean_image = upscale(clean_image)
 
             text = extract_text(clean_image)
 
