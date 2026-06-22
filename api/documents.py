@@ -39,8 +39,8 @@ executor = ThreadPoolExecutor(max_workers=3)
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 _MAX_CONCURRENT_GLOBAL = 3
 
-# Below this median MSER text-box height, OCR accuracy degrades sharply —
-# reject the scan instead of spending a Tesseract pass on it.
+# Below this median MSER text-box height, OCR accuracy degrades sharply,
+# so reject the scan instead of spending an OCR pass on it.
 MIN_TEXT_HEIGHT_PX = 15
 # Fewer detections than this and the median is too volatile (one short
 # character or punctuation box can swing it) — skip the gate, let OCR run.
