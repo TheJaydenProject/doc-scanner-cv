@@ -3,6 +3,10 @@ services:
     build: .
     container_name: doc-scanner-cv
     restart: unless-stopped
+    environment:
+      # Read from the host .env (compose substitutes ${...}). Required for OCR
+      # cleanup; if unset the app simply skips cleanup and returns raw text.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
       - ./data:/app/instance   # Persists scans.db outside the container
     expose:

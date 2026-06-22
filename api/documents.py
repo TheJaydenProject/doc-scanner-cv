@@ -16,6 +16,7 @@ from sqlalchemy import func
 from models import ScanRecord, db
 from pipeline.classifier import classify_document
 from pipeline.detector import detect_text_regions
+from pipeline.gemini import correct_ocr_text
 from pipeline.ocr import extract_text
 from pipeline.scanner import (
     ContourNotFoundError,
@@ -153,6 +154,12 @@ def _run_scan_job(
                 clean_image = upscale(clean_image)
 
             text = extract_text(clean_image)
+
+            # Best-effort Gemini cleanup of OCR spelling/punctuation/casing.
+            # No-ops (returns text unchanged) if the key is unset or the call
+            # fails, so it never breaks a scan. All downstream counts/storage use
+            # the corrected text.
+            text = correct_ocr_text(text)
 
             def encode_png(image) -> str:
                 _, buffer = cv2.imencode(".png", image)
