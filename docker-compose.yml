@@ -10,6 +10,7 @@ services:
     build: .
     container_name: doc-scanner-cv
     restart: unless-stopped
+    working_dir: /app/backend
     command: ["python", "-m", "gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:create_app()"]
     environment:
       # Read from the host .env (compose substitutes ${...}). Required for OCR
@@ -17,7 +18,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./data:/app/instance   # Persists scans.db outside the container
+      - ./backend/instance:/app/backend/instance   # Persists scans.db outside the container
       - shared-uploads:/app/storage
     expose:
       - "5000"
@@ -30,6 +31,7 @@ services:
     build: .
     container_name: doc-scanner-worker
     restart: unless-stopped
+    working_dir: /app/backend
     command: celery -A tasks.celery_app worker -l info --max-memory-per-child=500000 --max-tasks-per-child=10
     environment:
       - OMP_NUM_THREADS=1
@@ -40,7 +42,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./data:/app/instance
+      - ./backend/instance:/app/backend/instance
       - shared-uploads:/app/storage
     depends_on:
       - redis

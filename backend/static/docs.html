@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Doc Scanner CV — API Reference</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #000000;
+        --surface: #111111;
+        --border: #2a2a2a;
+        --border-subtle: #1f1f1f;
+        --text: #ffffff;
+        --text-muted: #888888;
+        --text-label: #666666;
+        --accent: #e8400c;
+        --code-bg: #0a0a0a;
+        --code-border: #222222;
+        --code-text: #cccccc;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .topnav {
+        height: 56px;
+        padding: 0 32px;
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg);
+      }
+
+      .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font);
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        color: var(--text);
+        flex: 0 0 auto;
+      }
+
+      .nav-tabs {
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+      }
+
+      .nav-tab {
+        position: relative;
+        font-size: 13px;
+        color: #666666;
+        text-decoration: none;
+        padding: 8px 0;
+        transition: color 150ms ease;
+      }
+
+      .nav-tab:hover {
+        color: #ffffff;
+      }
+
+      .nav-tab.active {
+        color: var(--text);
+      }
+
+      .nav-tab:not(.active)::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.4);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .nav-tab:not(.active):hover::after {
+        transform: scaleX(1);
+      }
+
+      .nav-tab.active::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 2px;
+        background: var(--accent);
+        border-radius: 2px;
+      }
+
+      .nav-cta {
+        flex: 0 0 auto;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text);
+        text-decoration: none;
+        border: 1px solid var(--text);
+        border-radius: 2px;
+        padding: 8px 16px;
+        transition: background 200ms ease;
+      }
+
+      .nav-cta:hover {
+        background: #1a1a1a;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .panel h2 {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-label);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .section-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      .endpoint {
+        margin-bottom: 48px;
+      }
+      .endpoint:last-child {
+        margin-bottom: 0;
+      }
+
+      .method-path {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .method {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 3px;
+        letter-spacing: 0.05em;
+      }
+      .method.post {
+        background: #1a3a1a;
+        color: #4ade80;
+        border: 1px solid #2d5a2d;
+      }
+      .method.get {
+        background: #1a2a3a;
+        color: #60a5fa;
+        border: 1px solid #1e3a5f;
+      }
+
+      .path {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--text);
+      }
+
+      .endpoint-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 16px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+
+      thead tr {
+        background: #1a1a1a;
+      }
+
+      tbody tr:nth-child(odd) {
+        background: #0d0d0d;
+      }
+
+      tbody tr:nth-child(even) {
+        background: #111111;
+      }
+
+      th {
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-label);
+        border-bottom: 1px solid var(--border);
+      }
+
+      td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+
+      td code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--code-bg);
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid var(--code-border);
+      }
+
+      .status {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .status.ok {
+        color: #4ade80;
+      }
+      .status.err {
+        color: #f87171;
+      }
+      .status.warn {
+        color: #fb923c;
+      }
+
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--code-border);
+        border-radius: 4px;
+        padding: 16px;
+        font-size: 12px;
+        font-family: var(--font-mono);
+        overflow-x: auto;
+        color: var(--code-text);
+        line-height: 1.6;
+      }
+
+      .flow {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--text-muted);
+        background: var(--code-bg);
+        border: 1px solid var(--code-border);
+        border-radius: 4px;
+        padding: 16px;
+        line-height: 2;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topnav">
+      <a class="nav-brand" href="/">
+        <svg
+          class="brand-mark"
+          width="18"
+          height="18"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M2 7V2h5" />
+          <path d="M13 2h5v5" />
+          <path d="M18 13v5h-5" />
+          <path d="M7 18H2v-5" />
+        </svg>
+        <span>Doc Scanner CV</span>
+      </a>
+      <nav class="nav-tabs">
+        <a class="nav-tab" href="/">App</a>
+        <a class="nav-tab active" href="/docs">API Docs</a>
+      </nav>
+      <a
+        class="nav-cta"
+        href="https://github.com/TheJaydenProject/doc-scanner-cv"
+        target="_blank"
+        rel="noopener"
+      >
+        GitHub
+      </a>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>API Reference</h2>
+        <p class="section-desc">
+          Base URL: <code>https://your-tunnel-url.trycloudflare.com</code><br />
+          All endpoints return JSON. All errors include an
+          <code>error</code> string field.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>Async Job Flow</h2>
+        <div class="flow">
+          POST /api/documents/scan &#x2192; 202 { job_id }<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; poll every 1.5s<br />
+          GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "processing"
+          }<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; when ready<br />
+          GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "complete",
+          result: { ... } }
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="endpoint">
+          <div class="method-path">
+            <span class="method post">POST</span>
+            <span class="path">/api/documents/scan</span>
+          </div>
+          <p class="endpoint-desc">
+            Accepts an image upload, validates it, submits the CV pipeline to a
+            background thread, and immediately returns a job ID. Subject to rate
+            limiting: 20 requests per IP per hour, 1 concurrent scan per IP, 3
+            concurrent scans globally.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>file</code></td>
+                <td>multipart/form-data</td>
+                <td>JPEG or PNG, max 20MB</td>
+              </tr>
+            </tbody>
+          </table>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Body</th>
+                <th>Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="status ok">202</span></td>
+                <td><code>{ job_id }</code></td>
+                <td>Job accepted</td>
+              </tr>
+              <tr>
+                <td><span class="status err">400</span></td>
+                <td><code>{ error }</code></td>
+                <td>Missing file, wrong MIME type, empty file</td>
+              </tr>
+              <tr>
+                <td><span class="status warn">429</span></td>
+                <td><code>{ error }</code></td>
+                <td>Rate limit exceeded or server at capacity</td>
+              </tr>
+            </tbody>
+          </table>
+          <pre>
+// Request
+POST /api/documents/scan
+Content-Type: multipart/form-data
+Body: file=&lt;image.jpg&gt;
+
+// Response 202
+{ "job_id": "a3f2c1d4-..." }</pre
+          >
+        </div>
+
+        <div class="endpoint">
+          <div class="method-path">
+            <span class="method get">GET</span>
+            <span class="path">/api/documents/jobs/&lt;job_id&gt;</span>
+          </div>
+          <p class="endpoint-desc">
+            Polls the status of a scan job. Returns processing, complete, or
+            failed. Poll every 1.5 seconds; client enforces a 60-second timeout.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Body</th>
+                <th>Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="status ok">200</span></td>
+                <td><code>{ status, result? }</code></td>
+                <td>Job found</td>
+              </tr>
+              <tr>
+                <td><span class="status err">404</span></td>
+                <td><code>{ error }</code></td>
+                <td>Job ID not found</td>
+              </tr>
+            </tbody>
+          </table>
+          <pre>
+// Response — complete
+{
+  "status": "complete",
+  "result": {
+    "text": "extracted text here...",
+    "char_count": 342,
+    "word_count": 61,
+    "processing_time_ms": 1240,
+    "warped_image_b64": "iVBORw0KGgo...",
+    "binarized_image_b64": "iVBORw0KGgo...",
+    "detections": [[12, 34, 18, 9], [44, 34, 22, 10]],
+    "detection_count": 47,
+    "doc_type": "printed",
+    "doc_type_confidence": 0.7821
+  }
+}
+
+// Response — failed
+{
+  "status": "failed",
+  "error": "No four-point document contour found."
+}</pre
+          >
+        </div>
+
+        <div class="endpoint">
+          <div class="method-path">
+            <span class="method get">GET</span>
+            <span class="path">/api/documents/history</span>
+          </div>
+          <p class="endpoint-desc">
+            Returns the 50 most recent scan records from the database, ordered
+            newest first.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Body</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="status ok">200</span></td>
+                <td>Array of scan records</td>
+              </tr>
+            </tbody>
+          </table>
+          <pre>
+// Response 200
+[
+  {
+    "id": 12,
+    "filename": "note.jpg",
+    "char_count": 342,
+    "word_count": 61,
+    "processing_time_ms": 1240,
+    "created_at": "2026-06-17T10:32:00"
+  },
+  ...
+]</pre
+          >
+        </div>
+
+        <div class="endpoint">
+          <div class="method-path">
+            <span class="method get">GET</span>
+            <span class="path">/api/documents/metrics</span>
+          </div>
+          <p class="endpoint-desc">
+            Returns aggregated statistics across all scans plus the 10 most
+            recent records. Used to populate the Chart.js dashboard.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Body</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="status ok">200</span></td>
+                <td>Aggregated stats + recent array</td>
+              </tr>
+            </tbody>
+          </table>
+          <pre>
+// Response 200
+{
+  "total_scans": 47,
+  "avg_processing_time_ms": 1180,
+  "avg_char_count": 298,
+  "recent": [
+    {
+      "filename": "note.jpg",
+      "char_count": 342,
+      "processing_time_ms": 1240,
+      "created_at": "2026-06-17T10:32:00"
+    },
+    ...
+  ]
+}</pre
+          >
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Rate Limits</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Limit</th>
+              <th>Value</th>
+              <th>Scope</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Scan submissions</td>
+              <td>20 per hour</td>
+              <td>Per IP</td>
+            </tr>
+            <tr>
+              <td>Concurrent scans</td>
+              <td>1 at a time</td>
+              <td>Per IP</td>
+            </tr>
+            <tr>
+              <td>Global concurrent scans</td>
+              <td>3 max</td>
+              <td>Server-wide</td>
+            </tr>
+            <tr>
+              <td>File size</td>
+              <td>20MB max</td>
+              <td>Per request</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
