@@ -1,3 +1,5 @@
+import logging
+
 import cv2
 import numpy as np
 
@@ -21,6 +23,7 @@ def preprocess(image_bytes: bytes) -> np.ndarray:
 
 def find_document_contour(blurred: np.ndarray) -> np.ndarray:
     edges = cv2.Canny(blurred, 30, 100)
+    edges_raw = edges.copy()  # raw Canny output, needed for density check
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 11))
     edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -29,12 +32,18 @@ def find_document_contour(blurred: np.ndarray) -> np.ndarray:
     if not contours:
         raise ContourNotFoundError("No contours found in image.")
 
-    # Pass 1: largest clean 4-point quad.
+    # Pass 1: collect all 4-point quads from the top-8 contours, then pick
+    # the first that passes the internal-block heuristics.
+    quads = []
     for contour in contours[:8]:
         perimeter = cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
         if len(approx) == 4:
-            return approx
+            quads.append(approx)
+
+    for quad in quads:
+        if _passes_internal_block_heuristics(quad, quads, edges_raw):
+            return quad
 
     # Pass 2: convex hull of the largest contour.
     hull = cv2.convexHull(contours[0])
@@ -81,6 +90,21 @@ def order_points(pts: np.ndarray) -> np.ndarray:
 MIN_CONTOUR_AREA_RATIO = 0.15
 MAX_CONTOUR_AREA_RATIO = 0.97
 
+# Internal-block rejection thresholds for Pass 1.
+# If any *other* qualifying quad's area >= this fraction of the candidate's
+# area, the candidate is rejected as likely an internal block rather than
+# the page boundary.
+MAX_RUNNER_UP_SIZE_RATIO = 0.5
+# When the size-gap check fires, this secondary density veto reinforces
+# rejection: if Canny edge density outside the candidate >= this fraction
+# of inside density, the outside region is busy with content, not background.
+MAX_OUTSIDE_INSIDE_DENSITY_RATIO = 0.5
+# Density check is skipped when inside density is below this floor to avoid
+# divide-by-near-zero instability on flat/uniform interiors.
+MIN_INSIDE_DENSITY_FOR_DENSITY_CHECK = 0.01
+
+logger = logging.getLogger(__name__)
+
 
 def _quad_area_ratio(contour: np.ndarray, image_shape: tuple) -> float:
     """Shoelace-formula area of the 4-point contour as a fraction of the full image area."""
@@ -90,6 +114,95 @@ def _quad_area_ratio(contour: np.ndarray, image_shape: tuple) -> float:
     quad_area = 0.5 * abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
     image_area = image_shape[0] * image_shape[1]
     return quad_area / image_area
+
+
+def _edge_density_inside_vs_outside(
+    edges_raw: np.ndarray, quad: np.ndarray
+) -> tuple[float, float]:
+    """Edge-pixel density inside vs. outside the quad on the raw Canny map.
+
+    Returns (inside_density, outside_density) where each is the fraction of
+    pixels in that region that are edge pixels (non-zero in *edges_raw*).
+    """
+    h, w = edges_raw.shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    pts = quad.reshape(4, 2).astype(np.int32)
+    cv2.fillPoly(mask, [pts], 255)
+
+    inside_pixels = int(np.count_nonzero(mask))
+    outside_pixels = h * w - inside_pixels
+
+    edge_binary = (edges_raw > 0).astype(np.uint8)
+    inside_edges = int(np.sum(edge_binary[mask == 255]))
+    outside_edges = int(np.sum(edge_binary[mask == 0]))
+
+    inside_density = inside_edges / max(inside_pixels, 1)
+    outside_density = outside_edges / max(outside_pixels, 1)
+    return inside_density, outside_density
+
+
+def _passes_internal_block_heuristics(
+    candidate: np.ndarray,
+    all_quads: list[np.ndarray],
+    edges_raw: np.ndarray,
+) -> bool:
+    """Return True if *candidate* is plausibly the page boundary, not an internal block.
+
+    Two checks are applied in sequence:
+
+    1. **Size-gap check (primary):** If any *other* qualifying quad in
+       *all_quads* has area >= MAX_RUNNER_UP_SIZE_RATIO of the candidate's
+       area, treat this as a busy page with multiple comparably-sized
+       rectangular blocks — reject the candidate.
+    2. **Edge-density check (secondary, only when size-gap fires):** On the
+       raw Canny edge map, if outside density >= MAX_OUTSIDE_INSIDE_DENSITY_RATIO
+       of inside density, that reinforces rejection. This check is skipped
+       (treated as inconclusive / does not block rejection) when inside
+       density is below MIN_INSIDE_DENSITY_FOR_DENSITY_CHECK.
+
+    Net rule: reject if and only if the size-gap check fires.
+    """
+    candidate_area = cv2.contourArea(candidate)
+    if candidate_area <= 0:
+        return False
+
+    # Size-gap check: does any other quad rival this one's area?
+    has_rival = False
+    for other in all_quads:
+        if other is candidate:
+            continue
+        other_area = cv2.contourArea(other)
+        ratio = other_area / candidate_area
+        if ratio >= MAX_RUNNER_UP_SIZE_RATIO:
+            has_rival = True
+            break
+
+    if not has_rival:
+        # No comparably-sized rival — accept outright (single dominant quad).
+        return True
+
+    # Size-gap fired — candidate has a rival.  Log and reject.
+    # (Density is captured for diagnostics but does not override rejection.)
+    inside_d, outside_d = _edge_density_inside_vs_outside(edges_raw, candidate)
+    density_info = ""
+    if inside_d >= MIN_INSIDE_DENSITY_FOR_DENSITY_CHECK:
+        density_ratio = outside_d / inside_d
+        density_info = (
+            f", outside/inside density ratio={density_ratio:.3f}"
+            f" (threshold={MAX_OUTSIDE_INSIDE_DENSITY_RATIO})"
+        )
+    else:
+        density_info = f", inside density too low ({inside_d:.4f}) to compute ratio"
+
+    logger.info(
+        "Pass-1 candidate rejected: area=%.0f, runner-up ratio=%.3f "
+        "(threshold=%.2f)%s",
+        candidate_area,
+        ratio,  # type: ignore[possibly-undefined]  # always set when has_rival
+        MAX_RUNNER_UP_SIZE_RATIO,
+        density_info,
+    )
+    return False
 
 
 INSET_RATIO = 0.025

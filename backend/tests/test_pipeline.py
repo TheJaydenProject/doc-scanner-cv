@@ -7,6 +7,7 @@ from pipeline.scanner import (
     binarize_handwritten,
     remove_ruled_lines,
     _quad_area_ratio,
+    _edge_density_inside_vs_outside,
     ContourNotFoundError,
 )
 
@@ -148,3 +149,58 @@ def test_remove_ruled_lines_keeps_margin_strokes_without_rules():
     cv2.line(binary, (5, 100), (18, 100), 0, thickness=2)  # 13px, below the length floor
     cleaned = remove_ruled_lines(binary)
     assert np.sum(cleaned == 0) == np.sum(binary == 0)
+
+
+def test_busy_report_skips_warp(busy_report_image_bytes):
+    # Multiple comparably-sized internal blocks on a flat page with no real
+    # boundary — the main failure mode this fix targets.  Every 4-point quad
+    # has a similarly-sized rival, so Pass 1 rejects them all and the pipeline
+    # returns the full, unwarped frame.
+    result, warped = run_pipeline(busy_report_image_bytes)
+    assert warped is False
+    assert result.shape[:2] == (800, 1000)
+
+
+def test_busy_report_with_boundary_warps_to_outer_rect(
+    busy_report_with_real_boundary_image_bytes,
+):
+    # Same internal blocks, but a genuine outer boundary exists on a dark
+    # background.  The outer boundary quad has no comparably-sized rival
+    # (it's far larger than any internal block), so it passes the heuristics
+    # and the pipeline warps to it.
+    result, warped = run_pipeline(busy_report_with_real_boundary_image_bytes)
+    assert warped is True
+    # Warped result should be roughly the outer rectangle's dimensions
+    # (approximately 740x560 minus inset crop), not the full 800x600 frame
+    # or a small internal block crop.
+    h, w = result.shape[:2]
+    assert h > 400, f"warped height {h} unexpectedly small"
+    assert w > 500, f"warped width {w} unexpectedly small"
+
+
+def test_single_secondary_block_still_warps(single_secondary_block_image_bytes):
+    # A real document with one embedded table/photo — the internal block is
+    # clearly less than 50% of the outer boundary's area, so the outer
+    # boundary passes the size-gap check and the document warps normally.
+    result, warped = run_pipeline(single_secondary_block_image_bytes)
+    assert warped is True
+    h, w = result.shape[:2]
+    assert h > 400, f"warped height {h} unexpectedly small"
+    assert w > 500, f"warped width {w} unexpectedly small"
+
+
+def test_edge_density_inside_vs_outside():
+    # Hand-built edge map: 100x100, top half (rows 0-49) is all edge pixels,
+    # bottom half (rows 50-99) is empty.  Quad covers the top-left quadrant
+    # (50x50 = 2500 pixels, all edges).  Inside density should be 1.0;
+    # outside density should be 2500 / 7500 ≈ 0.333 (the other 2500 edge
+    # pixels in the top-right quadrant, spread over 7500 outside pixels).
+    edges = np.zeros((100, 100), dtype=np.uint8)
+    edges[0:50, :] = 255  # top half = edge pixels
+
+    quad = np.array([[0, 0], [49, 0], [49, 49], [0, 49]]).reshape(4, 1, 2)
+    inside_d, outside_d = _edge_density_inside_vs_outside(edges, quad)
+
+    assert inside_d == pytest.approx(1.0, abs=0.05)
+    assert outside_d == pytest.approx(0.333, abs=0.05)
+
