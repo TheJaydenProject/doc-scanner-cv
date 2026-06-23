@@ -40,6 +40,22 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm 
 Write-Host "Launching Celery Worker..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; celery -A tasks.celery_app worker --pool=solo -l info"
 
+# Start a background job that waits for the server to be ready and opens the browser
+Start-Job -ScriptBlock {
+    $url = "http://localhost:5000"
+    for ($i = 0; $i -lt 60; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($response.StatusCode -eq 200) {
+                Start-Process $url
+                break
+            }
+        } catch {
+            Start-Sleep -Seconds 2
+        }
+    }
+} | Out-Null
+
 # 6. Start the Flask API in the current window
 Write-Host "Launching Flask API..." -ForegroundColor Green
 Set-Location "$PSScriptRoot\backend"

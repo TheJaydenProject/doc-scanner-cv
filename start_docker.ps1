@@ -13,6 +13,22 @@ try {
     # nvidia-smi not found or other error
 }
 
+# Start a background job that waits for the server to be ready and opens the browser
+Start-Job -ScriptBlock {
+    $url = "http://localhost:5000"
+    for ($i = 0; $i -lt 60; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($response.StatusCode -eq 200) {
+                Start-Process $url
+                break
+            }
+        } catch {
+            Start-Sleep -Seconds 2
+        }
+    }
+} | Out-Null
+
 if ($hasGpu) {
     Write-Host "NVIDIA GPU with >= 2GB VRAM detected. Starting Docker with GPU support..." -ForegroundColor Green
     docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build $args
