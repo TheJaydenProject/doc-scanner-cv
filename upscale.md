@@ -50,7 +50,7 @@ Instead of a fixed 3x upscale (which forces a 9x memory penalty even for 20px te
 
 Initially, the OpenCV `dnn_superres` module and an FSRCNN (`Fast Super-Resolution Convolutional Neural Network`) model were used to upscale the images.
 
-**Decision:** After A/B testing, the CNN forward pass was determined to be unnecessary for OCR accuracy. The upscaling method was swapped to `cv2.resize(INTER_CUBIC)`, which provides the required pixel density for EasyOCR's CRAFT detector at a fraction of the computational cost. The `UPSCALE_METHOD` toggle in `pipeline/superres.py` defaults to `"cubic"`. The FSRCNN `.pb` models are retained in `models/fsrcnn/` to allow easy swapping if future OCR models require sharper glyph reconstruction.
+**Decision:** After A/B testing, the upscaling method was reverted back to `FSRCNN` (Fast Super-Resolution Convolutional Neural Network) because the CNN forward pass provides better OCR accuracy with sharper glyph reconstruction. The `UPSCALE_METHOD` toggle in `pipeline/superres.py` defaults to `"fsrcnn"`. The cubic `cv2.resize` method is retained as a fallback option if a faster but softer scaling is required in the future.
 
 ---
 
@@ -69,13 +69,13 @@ The resolution gate evaluates the median text height:
 - Exposes `upscale(image: np.ndarray, median_text_height: float | None = None) -> np.ndarray`.
 - Skips images > 1.5MP.
 - Applies the adaptive factor based on the measured median text height.
-- Utilizes `cv2.INTER_CUBIC` for fast, reentrant upscaling.
+- Utilizes the FSRCNN models for sharp upscaling.
 
 ### Testing
 
 Coverage is provided in `tests/test_superres.py`:
 - `test_adaptive_factor_selection`: Verifies the correct 2x or 3x factor is chosen based on input height.
-- `test_upscale_multiplies_dimensions`: Confirms the cubic resize applies the correct adaptive dimensions.
+- `test_upscale_multiplies_dimensions`: Confirms the FSRCNN upscale applies the correct adaptive dimensions.
 - `test_upscale_skips_large_images`: Validates the `MAX_UPSCALE_INPUT_MP` memory guard. 
 
 *(Note: Test coverage includes both `"cubic"` and `"fsrcnn"` fallback paths).*

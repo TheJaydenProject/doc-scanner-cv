@@ -33,7 +33,7 @@ function openLightbox(src: string) {
   <section class="panel">
     <h2>Examples</h2>
     <p class="section-desc">
-      Production inputs undergo perspective warping and MSER text-height detection, where scans &lt;8px are rejected outright to conserve compute and those &lt;30px are routed through cubic upscaling prior to OCR.
+      Production inputs undergo perspective warping and MSER text-height detection, where scans &lt;8px are rejected outright to conserve compute and those &lt;30px are routed through FSRCNN upscaling prior to OCR.
     </p>
 
     <div class="example-grid">
