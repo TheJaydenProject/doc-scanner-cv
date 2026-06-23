@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import type { ScanResult } from "../types";
 
 const POLL_INTERVAL_MS = 1500;
@@ -71,6 +71,7 @@ const emit = defineEmits<{
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFileName = ref("");
+const previewUrl = ref<string | null>(null);
 const loading = ref(false);
 const error = ref("");
 const scanDisabled = ref(true);
@@ -153,6 +154,12 @@ onMounted(async () => {
   // average if it ever needs a fresh estimate.
   const stored = readActiveScan();
   if (stored) await resumeScan(stored);
+});
+
+onUnmounted(() => {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value);
+  }
 });
 
 // Reconnect to a job left running by a previous page load.
@@ -273,6 +280,10 @@ function onFileChange(event: Event) {
   if (!file) {
     selectedFileName.value = "";
     scanDisabled.value = true;
+    if (previewUrl.value) {
+      URL.revokeObjectURL(previewUrl.value);
+      previewUrl.value = null;
+    }
     return;
   }
 
@@ -282,11 +293,19 @@ function onFileChange(event: Event) {
     selectedFileName.value = "";
     scanDisabled.value = true;
     target.value = "";
+    if (previewUrl.value) {
+      URL.revokeObjectURL(previewUrl.value);
+      previewUrl.value = null;
+    }
     return;
   }
 
   selectedFileName.value = file.name;
   scanDisabled.value = false;
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value);
+  }
+  previewUrl.value = URL.createObjectURL(file);
 }
 
 async function onScan() {
@@ -427,6 +446,10 @@ function showError(message: string) {
     selectedFileName.value = "";
     if (fileInput.value) fileInput.value.value = "";
     scanDisabled.value = true;
+    if (previewUrl.value) {
+      URL.revokeObjectURL(previewUrl.value);
+      previewUrl.value = null;
+    }
   } else {
     scanDisabled.value = false;
   }
@@ -436,36 +459,43 @@ function showError(message: string) {
 <template>
   <section class="panel">
     <h2>Upload</h2>
-    <label for="file-input">Choose image (JPEG or PNG, max 20MB)</label>
+    <div class="upload-layout">
+      <div class="upload-controls">
+        <label for="file-input">Choose image (JPEG or PNG, max 20MB)</label>
 
-    <input
-      ref="fileInput"
-      type="file"
-      id="file-input"
-      class="sr-only"
-      accept="image/jpeg,image/png"
-      @change="onFileChange"
-    />
+        <input
+          ref="fileInput"
+          type="file"
+          id="file-input"
+          class="sr-only"
+          accept="image/jpeg,image/png"
+          @change="onFileChange"
+        />
 
-    <div class="file-pick-group">
-      <button type="button" class="file-pick-btn" @click="fileInput?.click()">
-        {{ selectedFileName || "Choose File" }}
-      </button>
-      <p v-if="selectedFileName" class="file-hint">Click to choose a different file</p>
-    </div>
+        <div class="file-pick-group">
+          <button type="button" class="file-pick-btn" @click="fileInput?.click()">
+            {{ selectedFileName || "Choose File" }}
+          </button>
+          <p v-if="selectedFileName" class="file-hint">Click to choose a different file</p>
+        </div>
 
-    <button
-      id="scan-btn"
-      :class="{ 'is-cancel': loading }"
-      :disabled="!loading && scanDisabled"
-      @click="loading ? onStop() : onScan()"
-    >
-      {{ loading ? "Cancel" : "Scan Document" }}
-    </button>
-    <div v-if="loading" class="scan-progress" id="loading" role="status" aria-live="polite">
-      <span>{{ progressLabel }}</span>
-      <div class="progress-track">
-        <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
+        <button
+          id="scan-btn"
+          :class="{ 'is-cancel': loading }"
+          :disabled="!loading && scanDisabled"
+          @click="loading ? onStop() : onScan()"
+        >
+          {{ loading ? "Cancel" : "Scan Document" }}
+        </button>
+        <div v-if="loading" class="scan-progress" id="loading" role="status" aria-live="polite">
+          <span>{{ progressLabel }}</span>
+          <div class="progress-track">
+            <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      <div v-if="previewUrl" class="upload-preview">
+        <img :src="previewUrl" alt="Selected image preview" />
       </div>
     </div>
     <p v-if="error" class="error" id="error-msg" role="alert">
@@ -478,3 +508,44 @@ function showError(message: string) {
     </p>
   </section>
 </template>
+
+<style scoped>
+.upload-layout {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.upload-preview {
+  flex: 0 0 auto;
+  width: 100px;
+  height: 100px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 768px) {
+  .upload-layout {
+    flex-direction: column;
+  }
+}
+</style>
