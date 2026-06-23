@@ -61,6 +61,25 @@ _active_ips: set[str] = set()
 _active_job_count: int = 0
 _active_job_lock = Lock()
 
+# job_id -> ip, for jobs whose IP/count slot hasn't been released yet.
+# Cancellation (cancel_job) and natural completion (_run_scan_job's finally)
+# race to release the same slot; popping this under _active_job_lock makes
+# whichever happens first the sole releaser and the other a no-op, so the
+# slot is never double-released (which would let _active_job_count drift
+# negative and silently raise the real concurrency cap above _MAX_CONCURRENT_GLOBAL).
+_job_ip: dict[str, str] = {}
+
+
+def _release_job_slot(job_id: str) -> None:
+    global _active_job_count
+    with _active_job_lock:
+        ip = _job_ip.pop(job_id, None)
+        if ip is None:
+            return
+        _active_ips.discard(ip)
+        _active_job_count -= 1
+
+
 # In-memory job store. Maps job_id -> { status, result | error }.
 # OrderedDict so eviction always removes the oldest entry.
 # A production system would use Redis or a dedicated jobs table.
@@ -94,16 +113,15 @@ def _median_text_height(
 
 
 def _run_scan_job(
-    app: Flask, job_id: str, image_bytes: bytes, filename: str, ip: str
+    app: Flask, job_id: str, image_bytes: bytes, filename: str
 ) -> None:
     """
     Runs in a background thread via ThreadPoolExecutor.
     Receives the app instance directly to avoid creating a second app,
     then pushes an application context for DB access.
-    Always removes the IP from _active_ips and decrements the job counter
-    on completion or failure.
+    Always releases the job's IP/count slot (via _release_job_slot) on
+    completion or failure.
     """
-    global _active_job_count
     with app.app_context():
         start = time.time()
 
@@ -217,10 +235,8 @@ def _run_scan_job(
                 "error": "Internal processing error.",
             }
         finally:
-            # Always release the IP slot and decrement counter regardless of outcome.
-            _active_ips.discard(ip)
-            with _active_job_lock:
-                _active_job_count -= 1
+            # Releases the slot unless cancel_job() already did (see _job_ip).
+            _release_job_slot(job_id)
 
 
 @documents_bp.route("/scan", methods=["POST"])
@@ -261,11 +277,10 @@ def scan():
     _job_store[job_id] = {"status": "processing"}
     _evict_job_store()
     _active_ips.add(ip)
+    _job_ip[job_id] = ip
 
     app = current_app._get_current_object()
-    executor.submit(
-        _run_scan_job, app, job_id, image_bytes, file.filename or "upload", ip
-    )
+    executor.submit(_run_scan_job, app, job_id, image_bytes, file.filename or "upload")
 
     return jsonify({"job_id": job_id}), 202
 
@@ -283,14 +298,21 @@ def get_job(job_id: str):
 @documents_bp.route("/jobs/<job_id>", methods=["DELETE"])
 def cancel_job(job_id: str):
     """
-    Best-effort cancellation: the frontend calls this when it gives up
+    Cancellation: the frontend calls this on Stop, or when it gives up
     polling. Only flips a still-processing job to "cancelled" so
     _run_scan_job can bail at its next checkpoint; a job that already
     finished is left alone so this can never clobber a real result.
+
+    Also releases the IP/count slot immediately rather than waiting for the
+    background thread to notice the cancellation flag — otherwise a quick
+    Stop-then-Scan from the same IP could still hit "a scan is already in
+    progress" for however long the abandoned job takes to reach its next
+    checkpoint.
     """
     job = _job_store.get(job_id)
     if job is not None and job.get("status") == "processing":
         job["status"] = "cancelled"
+        _release_job_slot(job_id)
     return jsonify({"status": "ok"}), 200
 
 

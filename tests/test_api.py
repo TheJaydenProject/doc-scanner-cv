@@ -1,6 +1,7 @@
 import io
 import time
 
+import api.documents as doc_api
 from api.documents import MIN_TEXT_HEIGHT_PX, _job_store, _median_text_height
 
 
@@ -146,6 +147,45 @@ def test_cancel_does_not_clobber_finished_job(client):
 def test_cancel_unknown_job_is_a_noop(client):
     res = client.delete("/api/documents/jobs/does-not-exist")
     assert res.status_code == 200
+
+
+def test_cancel_releases_ip_and_job_count_immediately(client):
+    """
+    Cancelling must free the slot right away rather than waiting for the
+    background thread to notice — otherwise a quick Stop-then-Scan from the
+    same IP would still be rejected with "a scan is already in progress".
+    """
+    doc_api._active_ips.add("9.9.9.9")
+    doc_api._job_ip["job-z"] = "9.9.9.9"
+    with doc_api._active_job_lock:
+        doc_api._active_job_count = 1
+    _job_store["job-z"] = {"status": "processing"}
+
+    res = client.delete("/api/documents/jobs/job-z")
+
+    assert res.status_code == 200
+    assert "9.9.9.9" not in doc_api._active_ips
+    assert doc_api._active_job_count == 0
+    assert "job-z" not in doc_api._job_ip
+
+
+def test_release_job_slot_is_idempotent(client):
+    """
+    Cancellation and the job's own natural-completion finally both call
+    _release_job_slot for the same job_id. The second call must be a no-op —
+    otherwise _active_job_count double-decrements and drifts negative,
+    silently raising the real concurrency cap above _MAX_CONCURRENT_GLOBAL.
+    """
+    doc_api._active_ips.add("8.8.8.8")
+    doc_api._job_ip["job-w"] = "8.8.8.8"
+    with doc_api._active_job_lock:
+        doc_api._active_job_count = 1
+
+    doc_api._release_job_slot("job-w")
+    doc_api._release_job_slot("job-w")
+
+    assert doc_api._active_job_count == 0
+    assert "8.8.8.8" not in doc_api._active_ips
 
 
 def test_median_text_height_returns_none_below_sample_size():

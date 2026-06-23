@@ -10,11 +10,13 @@ def reset_scan_state():
     import api.documents as doc_api
     doc_api._active_ips.clear()
     doc_api._job_store.clear()
+    doc_api._job_ip.clear()
     with doc_api._active_job_lock:
         doc_api._active_job_count = 0
     yield
     doc_api._active_ips.clear()
     doc_api._job_store.clear()
+    doc_api._job_ip.clear()
     with doc_api._active_job_lock:
         doc_api._active_job_count = 0
 
