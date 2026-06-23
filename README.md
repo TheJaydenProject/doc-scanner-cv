@@ -19,7 +19,8 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
 6. **Binarize**: Branches by predicted type. `printed` uses Otsu's threshold (predictable bimodal contrast on flat ink); `handwritten`/`mixed` use adaptive Gaussian thresholding on the LAB lightness channel (block size 51, C=15), which tolerates uneven lighting and colored backgrounds better. Connected-component analysis then erases ruled/feint notebook lines and vertical margin borders: every blank line segment forms its own component regardless of length, and a component is erased only if it's long relative to the page in its dominant direction *and* thin in the perpendicular direction — a signature ordinary letters and joined cursive never share. (An earlier kernel/morphological approach required an unbroken ink run across ~20% of the page width, which missed lines broken by handwriting.)
 7. **Text region detection**: MSER runs on the binarized, line-stripped image. Bounding boxes under 100 px² are discarded as noise, along with regions with a width:height ratio ≥ 15:1 or height ≤ 8px, both signatures of ruled-line fragments rather than glyphs. The binarize → line-removal → MSER chain exists solely to power the resolution gate (below) and a text-region count returned to the client; OCR itself never sees a binarized pixel.
 8. **Resolution gate**: If MSER returned at least 5 boxes, their median height is computed. Below 5 boxes the sample is too volatile to judge, so the gate is skipped and OCR proceeds normally. Otherwise, a median under 30px routes the image through FSRCNN upscaling to enlarge small text for the OCR engine. If the text is below a hard floor of 8px, it is rejected outright with a friendly message asking the user to recapture at higher resolution.
-9. **OCR**: EasyOCR (CRAFT text detector + CRNN recognizer, CPU-only) reads the warped, **non-binarized** image: its CNNs recover far more from the natural grayscale gradient than from a hard-binarized page, where surviving ruled lines fuse into the glyphs and collapse recognition. Detected word/phrase boxes are regrouped into reading order (clustered into rows by vertical centre, ordered left-to-right within each row), then a light post-pass strips ruled-line artifacts (leading/trailing dashes, intra-word underscores). The model weights are not committed to the repository; they are fetched at Docker build time and loaded with downloads disabled at runtime, so the running container never phones home (see "OCR model weights" below). The result, character count, word count, processing time, and the clean warped image are persisted to SQLite and returned to the client.
+9. **OCR**: EasyOCR (CRAFT text detector + CRNN recognizer, CPU-only) reads the warped, **non-binarized** image: its CNNs recover far more from the natural grayscale gradient than from a hard-binarized page, where surviving ruled lines fuse into the glyphs and collapse recognition. Detected word/phrase boxes are regrouped into reading order (clustered into rows by vertical centre, ordered left-to-right within each row), then a light post-pass strips ruled-line artifacts (leading/trailing dashes, intra-word underscores). The model weights are not committed to the repository; they are fetched at Docker build time and loaded with downloads disabled at runtime, so the running container never phones home (see "OCR model weights" below).
+10. **LLM Post-Correction (Optional)**: If `OPENROUTER_API_KEY` is configured, the raw OCR text is sent to DeepSeek V4 Flash via OpenRouter for context-aware spelling and punctuation correction (never rewriting or altering valid words). If the key is unset or the network fails, it gracefully falls back to the raw text. The final text, character count, word count, processing time, and the clean warped image are persisted to SQLite and returned to the client.
 
 ---
 
@@ -44,7 +45,7 @@ Computer vision pipeline that detects a document boundary in a photograph, dewra
       |
   [Resolution gate] median box height < 15px across >=5 boxes -> reject before OCR
       |
-  [OCR]             EasyOCR (CRAFT + CRNN, CPU) on the warped image -> reading-order reconstruction -> extracted text
+  [OCR]             EasyOCR (CRAFT + CRNN, CPU) on the warped image -> reading-order reconstruction -> LLM cleanup -> extracted text
       |
   [SQLite]          ScanRecord (char_count, word_count, processing_time_ms)
       |
@@ -236,6 +237,7 @@ curl http://localhost:5000/api/documents/jobs/3f2a1b...
 | Variable | Type | Required | Description |
 |----------|------|----------|-------------|
 | `CLOUDFLARE_TUNNEL_TOKEN` | string | Production only | Authenticates the `cloudflared` container. Set in the host environment before `docker compose up`. |
+| `OPENROUTER_API_KEY` | string | Optional | Enables LLM post-correction via OpenRouter to fix OCR spelling and punctuation errors. |
 
 All other settings (SQLite path, rate limits, max upload size, thread pool size) are hardcoded in `app.py` and `api/documents.py`. The database file is written to `instance/scans.db` and mounted to `./data/` in Docker so it persists across container restarts.
 
