@@ -21,13 +21,19 @@ from sqlalchemy.engine import Engine
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if type(dbapi_connection).__name__ == "sqlite3.Connection" or "sqlite" in str(type(dbapi_connection)):
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.close()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Could not enable SQLite WAL mode (this is normal for Windows Docker bind-mounts): {e}")
+        finally:
+            cursor.close()
 
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///scans.db"
+    os.makedirs(app.instance_path, exist_ok=True)
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.join(app.instance_path, 'scans.db')}"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # 20MB max. Stricter than default to protect VPS from large payload abuse.
     app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
