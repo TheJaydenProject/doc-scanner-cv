@@ -459,6 +459,16 @@ Bug reports and feature requests go in [GitHub Issues](https://github.com/TheJay
 
 ---
 
+## Development Logs
+
+Major bug fixes, design decisions, and deep dives into the pipeline's behaviour are documented in the `docs/devlogs/` directory for future reference:
+
+- [`devlog-arm64-ocr-regression.md`](docs/devlogs/devlog-arm64-ocr-regression.md) - Details on PyTorch CPU wheel optimizations and the 195s OCR timeout on ARM64.
+- [`devlog-scanner-contour-robustness.md`](docs/devlogs/devlog-scanner-contour-robustness.md) - Deep dive into contour detection logic, convex hull fallbacks, and internal content block rejection heuristics.
+- [`devlog-cv-pipeline-bugs.md`](docs/devlogs/devlog-cv-pipeline-bugs.md) - Notes on the ONNX opset version fix and MSER binarization noise.
+
+---
+
 ## Contact
 
 [github.com/TheJaydenProject](https://github.com/TheJaydenProject)
