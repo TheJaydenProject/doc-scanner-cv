@@ -97,6 +97,9 @@ def correct_ocr_text(text: str, doc_type: str | None = None) -> str:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://github.com/TheJaydenProject/doc-scanner-cv",
+            "X-Title": "Doc Scanner CV",
+            "User-Agent": "DocScannerCV/1.0",
         },
         method="POST",
     )
