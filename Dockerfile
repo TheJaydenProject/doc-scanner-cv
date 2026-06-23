@@ -50,7 +50,7 @@ COPY --from=builder /app/frontend/dist/index.html ./backend/templates/index.html
 
 EXPOSE 5000
 
-RUN addgroup --system celerygroup && adduser --system --ingroup celerygroup celeryworker
+RUN addgroup --system celerygroup && adduser --system --ingroup celerygroup --home /app celeryworker
 RUN chown -R celeryworker:celerygroup /app
 USER celeryworker
 
