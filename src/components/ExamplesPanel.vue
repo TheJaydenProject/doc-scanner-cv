@@ -32,11 +32,19 @@ function openLightbox(src: string) {
 <template>
   <section class="panel">
     <h2>Examples</h2>
-    <p class="section-desc">
-      Real scans of handwritten and printed documents processed through the
-      pipeline. OCR reads the warped image directly; binarization and
-      detection power the resolution gate, not text extraction.
-    </p>
+    <pre class="process-flow">
+[Raw Warped Scan] -> [Binarize + Remove Lines + MSER Detect] -> [Resolution Gate]
+                                                                       |
+              +--------------------------------------------------------+--------------------------------------------------------+
+              v (median height >= 30px)                                                                  v (median height < 30px)
+        [Direct OCR on warped image]                                                          [FSRCNN upscale of warped image]
+              |                                                                                          |
+              v                                                                                          v
+        [Extracted text]                                                                       [OCR on upscaled image]
+                                                                                                         |
+                                                                                                         v (median < hard floor)
+                                                                                               [Reject: unrecoverable]
+    </pre>
 
     <div class="example-grid">
       <div class="example-card" v-for="ex in examples" :key="ex.id">
@@ -90,5 +98,18 @@ function openLightbox(src: string) {
   background: var(--inset);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
+}
+
+.process-flow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  overflow-x: auto;
+  white-space: pre;
+  margin-bottom: var(--space-4);
 }
 </style>
