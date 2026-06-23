@@ -1,0 +1,30 @@
+services:
+  doc-scanner-cv:
+    build:
+      context: .
+      args:
+        USE_GPU: "true"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - USE_GPU=true
+
+  worker:
+    build:
+      context: .
+      args:
+        USE_GPU: "true"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - USE_GPU=true

@@ -18,8 +18,17 @@ RUN apt-get update && apt-get install -y \
     
 WORKDIR /app
 
+ARG USE_GPU=false
+
 COPY backend/requirements.txt ./backend/
-RUN pip install --no-cache-dir -r backend/requirements.txt
+RUN if [ "$USE_GPU" = "true" ]; then \
+      pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 && \
+      grep -v '^torch' backend/requirements.txt > backend/req_no_torch.txt && \
+      pip install --no-cache-dir -r backend/req_no_torch.txt && \
+      rm backend/req_no_torch.txt; \
+    else \
+      pip install --no-cache-dir -r backend/requirements.txt; \
+    fi
 
 COPY backend/scripts/fetch_ocr_weights.sh ./backend/scripts/
 RUN cd backend && bash scripts/fetch_ocr_weights.sh && rm scripts/fetch_ocr_weights.sh
