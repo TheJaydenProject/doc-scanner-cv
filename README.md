@@ -137,9 +137,9 @@ Sources:
 
 ## Installation
 
-Because the application uses Redis and Celery for background scanning tasks, **using Docker is highly recommended** for both development and production. Running the full stack directly on your host OS is more complex and requires a local Redis server.
-
 ### Method 1: Docker (Recommended)
+
+Using Docker is highly recommended because it perfectly manages Redis and Celery background workers across all operating systems. 
 
 1. Clone the repository.
 
@@ -150,26 +150,32 @@ cd doc-scanner-cv
 
 2. Start the full application stack.
 
+We have automated startup scripts that will dynamically check if your system has an NVIDIA GPU with at least 2GB of VRAM and enable GPU acceleration.
+
 **On Windows:**
-Simply run our automated startup script! It will check if your system has an NVIDIA GPU with at least 2GB of VRAM. If it does, it will automatically enable GPU acceleration for Docker, making your scans incredibly fast. Otherwise, it defaults to the CPU version.
 ```powershell
 .\start_docker.ps1
 ```
 
 **On Linux / macOS:**
-Start using standard Docker Compose:
 ```bash
-docker compose up --build
+chmod +x start_docker.sh
+./start_docker.sh
 ```
 
-This single command builds the Vue frontend, installs all Python dependencies, starts a Redis container, spins up the Celery worker, and launches the Flask API. The application will be available at `http://localhost:5000`.
+*(Note: Add `-d` to the end of the script to run it silently in the background!)*
 
-For production deployment with Cloudflare Tunnel, set `CLOUDFLARE_TUNNEL_TOKEN` in your host environment before starting in detached mode:
+The application will be available at `http://localhost:5000`.
 
-```bash
-export CLOUDFLARE_TUNNEL_TOKEN=your_token_here
-docker compose up -d
+### Method 2: Native Windows (Low RAM Mode)
+
+If you are on Windows and Docker/WSL is consuming too much memory, you can run the entire stack natively without Docker! We provide an automated script that downloads a lightweight portable Redis binary and opens the necessary terminals for you.
+
+**On Windows:**
+```powershell
+.\start_native_stack.ps1
 ```
+*(This will automatically open separate windows for your Frontend and Celery worker. When you are done, simply close the windows!)*
 
 ### Method 2: Local Development (Without Docker)
 
@@ -183,30 +189,6 @@ cd doc-scanner-cv
 ```
 
 2. Install Python and Node dependencies, and build the frontend.
-
-**On Windows:**
-We provide an automated installation script that checks for an NVIDIA GPU, installs the correct CUDA version of PyTorch if supported, and installs the remaining backend requirements. First, create and activate your virtual environment:
-```powershell
-python -m venv venv
-.\venv\Scripts\activate
-.\install_native.ps1
-```
-
-**On Linux / macOS:**
-Create your virtual environment and install dependencies manually.
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r backend/requirements.txt
-```
-> **Note on Local GPU support (Linux/macOS):** By default, `requirements.txt` installs the CPU-only version of PyTorch. If you have a CUDA-capable GPU, you can speed up OCR by replacing it:
-> ```bash
-> pip uninstall torch torchvision -y
-> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-> ```
-
-After installing Python dependencies, build the frontend:
-```bash
 cd frontend
 npm ci
 npm run build
