@@ -74,10 +74,6 @@ def correct_ocr_text(text: str, doc_type: str | None = None) -> str:
     if not text or not text.strip():
         return text
 
-    if doc_type == "printed":
-        logger.info("Skipping OCR cleanup for printed document.")
-        return text
-
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         logger.info("OPENROUTER_API_KEY not set — skipping OCR cleanup.")
