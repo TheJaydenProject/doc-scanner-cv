@@ -20,9 +20,15 @@ WORKDIR /app
 
 ARG USE_GPU=false
 
+# Install PyTorch in its own layer first so it caches permanently
+# (unless the USE_GPU flag changes). This prevents the massive 2.5GB download
+# from running again if you ever modify requirements.txt!
+RUN if [ "$USE_GPU" = "true" ]; then \
+      pip install --no-cache-dir torch==2.12.1 torchvision==0.27.1 --index-url https://download.pytorch.org/whl/cu121; \
+    fi
+
 COPY backend/requirements.txt ./backend/
 RUN if [ "$USE_GPU" = "true" ]; then \
-      pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 && \
       grep -v '^torch' backend/requirements.txt > backend/req_no_torch.txt && \
       pip install --no-cache-dir -r backend/req_no_torch.txt && \
       rm backend/req_no_torch.txt; \
