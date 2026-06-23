@@ -2,7 +2,7 @@ import io
 import json
 import time
 
-from tasks import MIN_TEXT_HEIGHT_PX, _median_text_height, redis_client
+from tasks import MAX_CONCURRENT_SCANS, MIN_TEXT_HEIGHT_PX, STALE_PROCESSING_TIMEOUT_S, _median_text_height, redis_client
 
 
 def test_rejects_missing_file(client):
@@ -167,3 +167,40 @@ def test_median_text_height_flags_low_resolution():
     median = _median_text_height(detections)
     assert median is not None
     assert median < MIN_TEXT_HEIGHT_PX
+
+
+def test_scan_rejected_when_global_concurrency_cap_reached(client, minimal_jpeg_bytes):
+    """MAX_CONCURRENT_SCANS jobs already processing (from other IPs) -> 429."""
+    now = time.time()
+    for i in range(MAX_CONCURRENT_SCANS):
+        redis_client.set(
+            f"job:slot-{i}",
+            json.dumps({"status": "processing", "ip": f"10.0.0.{i}", "created_at": now}),
+        )
+    data = {"file": (io.BytesIO(minimal_jpeg_bytes), "test.jpg", "image/jpeg")}
+    res = client.post("/api/documents/scan", data=data, content_type="multipart/form-data")
+    assert res.status_code == 429
+
+
+def test_scan_rejected_when_same_ip_already_processing(client, minimal_jpeg_bytes):
+    """The requesting IP already has a job in flight -> 429, even with capacity to spare."""
+    redis_client.set(
+        "job:existing",
+        json.dumps({"status": "processing", "ip": "127.0.0.1", "created_at": time.time()}),
+    )
+    data = {"file": (io.BytesIO(minimal_jpeg_bytes), "test.jpg", "image/jpeg")}
+    res = client.post("/api/documents/scan", data=data, content_type="multipart/form-data")
+    assert res.status_code == 429
+
+
+def test_scan_allowed_when_processing_jobs_are_stale(client, minimal_jpeg_bytes):
+    """Jobs stuck at "processing" past STALE_PROCESSING_TIMEOUT_S don't count toward the cap."""
+    stale_time = time.time() - (STALE_PROCESSING_TIMEOUT_S + 60)
+    for i in range(MAX_CONCURRENT_SCANS):
+        redis_client.set(
+            f"job:stale-{i}",
+            json.dumps({"status": "processing", "ip": f"10.0.0.{i}", "created_at": stale_time}),
+        )
+    data = {"file": (io.BytesIO(minimal_jpeg_bytes), "test.jpg", "image/jpeg")}
+    res = client.post("/api/documents/scan", data=data, content_type="multipart/form-data")
+    assert res.status_code == 202

@@ -33,6 +33,14 @@ MIN_TEXT_HEIGHT_PX = 30
 UPSCALE_FLOOR_PX = 8
 MIN_DETECTION_SAMPLE_SIZE = 5
 
+# Concurrency limits, enforced in api/documents.py before a scan is dispatched.
+MAX_CONCURRENT_SCANS = 3
+# A job stuck at "processing" past this age (e.g. its worker was hard-killed by
+# Celery's --max-memory-per-child without ever writing a terminal state) stops
+# counting toward the cap, so a leaked slot self-heals instead of permanently
+# eating one of MAX_CONCURRENT_SCANS.
+STALE_PROCESSING_TIMEOUT_S = 600
+
 # Initialize Celery
 redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
 celery_app = Celery("tasks", broker=redis_url)
@@ -70,6 +78,32 @@ def update_job_state(job_id: str, state: dict):
 def get_job_state(job_id: str) -> dict:
     raw = redis_client.get(f"job:{job_id}")
     return json.loads(raw) if raw else {}
+
+def count_active_jobs(ip: str) -> tuple[int, bool]:
+    """
+    Scans live job records to determine current load, rather than maintaining
+    a separate counter that could drift if a worker is ever hard-killed
+    mid-job (a SIGKILLed process can't run cleanup code to decrement one).
+
+    Returns (global_active_count, ip_has_active_job), counting only jobs
+    still "processing" and younger than STALE_PROCESSING_TIMEOUT_S.
+    """
+    now = time.time()
+    active_count = 0
+    ip_active = False
+    for key in redis_client.scan_iter(match="job:*"):
+        raw = redis_client.get(key)
+        if not raw:
+            continue
+        job = json.loads(raw)
+        if job.get("status") != "processing":
+            continue
+        if now - job.get("created_at", 0) > STALE_PROCESSING_TIMEOUT_S:
+            continue
+        active_count += 1
+        if job.get("ip") == ip:
+            ip_active = True
+    return active_count, ip_active
 
 @celery_app.task(bind=True)
 def run_scan_job(self, job_id: str, file_path: str, filename: str):

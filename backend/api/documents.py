@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 import uuid
 
 from flask import Blueprint, jsonify, request
@@ -9,13 +10,26 @@ from flask_limiter.util import get_remote_address
 from sqlalchemy import func
 
 from models import ScanRecord, db
-from tasks import celery_app, run_scan_job, redis_client, get_job_state
+from tasks import (
+    MAX_CONCURRENT_SCANS,
+    celery_app,
+    count_active_jobs,
+    get_job_state,
+    redis_client,
+    run_scan_job,
+)
 
 documents_bp = Blueprint("documents", __name__)
 logger = logging.getLogger(__name__)
 
-# Global rate limiter — init_app() called in app factory.
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
+# Global rate limiter — init_app() called in app factory. Backed by Redis (not
+# the default in-process memory store) so the 20/hour cap is shared across all
+# Gunicorn workers instead of each worker enforcing its own separate count.
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri=os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0"),
+)
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 STORAGE_DIR = os.environ.get("STORAGE_DIR", "storage")
@@ -41,17 +55,35 @@ def scan():
     if len(image_bytes) == 0:
         return jsonify({"error": "Empty file."}), 400
 
+    ip = get_remote_address()
+    active_count, ip_active = count_active_jobs(ip)
+
+    if ip_active:
+        return jsonify(
+            {"error": "You already have a scan in progress. Wait for it to finish, or cancel it, before starting another."}
+        ), 429
+
+    if active_count >= MAX_CONCURRENT_SCANS:
+        return jsonify(
+            {"error": "The server is at capacity. Please try again in a moment."}
+        ), 429
+
     job_id = str(uuid.uuid4())
     file_path = os.path.join(STORAGE_DIR, f"{job_id}.png")
-    
+
     # Save file to shared volume
     with open(file_path, "wb") as f:
         f.write(image_bytes)
 
-    # Initialize job state in Redis
+    # Initialize job state in Redis. ip/created_at exist solely so
+    # count_active_jobs() can attribute and age out in-flight jobs; they are
+    # not read anywhere else and are dropped once the job reaches a terminal
+    # state (the final update_job_state() call writes a fresh dict).
     initial_state = {
         "status": "processing",
-        "filename": file.filename or "upload"
+        "filename": file.filename or "upload",
+        "ip": ip,
+        "created_at": time.time(),
     }
     redis_client.set(f"job:{job_id}", json.dumps(initial_state), ex=86400)
 

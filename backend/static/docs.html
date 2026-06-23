@@ -196,6 +196,11 @@
         color: #60a5fa;
         border: 1px solid #1e3a5f;
       }
+      .method.delete {
+        background: #3a1a1a;
+        color: #f87171;
+        border: 1px solid #5a2d2d;
+      }
 
       .path {
         font-family: var(--font-mono);
@@ -330,7 +335,10 @@
       <section class="panel">
         <h2>API Reference</h2>
         <p class="section-desc">
-          Base URL: <code>https://your-tunnel-url.trycloudflare.com</code><br />
+          Base URL: your deployment's origin, e.g.
+          <code>http://localhost:5000</code> locally or
+          <code>https://doc-scanner.thejaydenproject.com</code> on the live
+          demo.<br />
           All endpoints return JSON. All errors include an
           <code>error</code> string field.
         </p>
@@ -340,10 +348,11 @@
         <h2>Async Job Flow</h2>
         <div class="flow">
           POST /api/documents/scan &#x2192; 202 { job_id }<br />
-          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; poll every 1.5s<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; poll every 4s, up to 30 attempts<br />
           GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "processing"
           }<br />
-          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; when ready<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; when ready, or DELETE the job to
+          cancel it early<br />
           GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "complete",
           result: { ... } }
         </div>
@@ -356,8 +365,8 @@
             <span class="path">/api/documents/scan</span>
           </div>
           <p class="endpoint-desc">
-            Accepts an image upload, validates it, submits the CV pipeline to a
-            background thread, and immediately returns a job ID. Subject to rate
+            Accepts an image upload, validates it, dispatches the CV pipeline as
+            a Celery task, and immediately returns a job ID. Subject to rate
             limiting: 20 requests per IP per hour, 1 concurrent scan per IP, 3
             concurrent scans globally.
           </p>
@@ -420,8 +429,10 @@ Body: file=&lt;image.jpg&gt;
             <span class="path">/api/documents/jobs/&lt;job_id&gt;</span>
           </div>
           <p class="endpoint-desc">
-            Polls the status of a scan job. Returns processing, complete, or
-            failed. Poll every 1.5 seconds; client enforces a 60-second timeout.
+            Polls the status of a scan job. Returns processing (optionally with
+            <code>stage: "upscaling"</code>), complete, failed, or cancelled.
+            The frontend polls every 4 seconds and gives up after 30 attempts
+            (2 minutes), cancelling the job and showing a timeout error.
           </p>
           <table>
             <thead>
@@ -454,11 +465,10 @@ Body: file=&lt;image.jpg&gt;
     "word_count": 61,
     "processing_time_ms": 1240,
     "warped_image_b64": "iVBORw0KGgo...",
-    "binarized_image_b64": "iVBORw0KGgo...",
-    "detections": [[12, 34, 18, 9], [44, 34, 22, 10]],
     "detection_count": 47,
-    "doc_type": "printed",
-    "doc_type_confidence": 0.7821
+    "doc_type": "handwritten",
+    "doc_type_confidence": 0.7821,
+    "doc_type_source": "model"
   }
 }
 
@@ -466,7 +476,47 @@ Body: file=&lt;image.jpg&gt;
 {
   "status": "failed",
   "error": "No four-point document contour found."
+}
+
+// Response — cancelled (via DELETE, see below)
+{
+  "status": "cancelled"
 }</pre
+          >
+        </div>
+
+        <div class="endpoint">
+          <div class="method-path">
+            <span class="method delete">DELETE</span>
+            <span class="path">/api/documents/jobs/&lt;job_id&gt;</span>
+          </div>
+          <p class="endpoint-desc">
+            Cancels a scan. If it's still processing, the Celery task is
+            forcefully terminated (<code>SIGKILL</code>). A no-op if the job
+            already finished or doesn't exist; both still return 200.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Body</th>
+                <th>Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="status ok">200</span></td>
+                <td><code>{ status: "ok" }</code></td>
+                <td>Cancelled, or no-op (already finished / unknown ID)</td>
+              </tr>
+            </tbody>
+          </table>
+          <pre>
+// Request
+DELETE /api/documents/jobs/a3f2c1d4-...
+
+// Response 200
+{ "status": "ok" }</pre
           >
         </div>
 
