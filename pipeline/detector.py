@@ -13,7 +13,7 @@ def detect_text_regions(binarized: np.ndarray) -> tuple[np.ndarray, list[tuple[i
     """
     mser = cv2.MSER_create()
     # detectRegions returns raw pixel sets; bboxes gives rectangles directly.
-    regions, bboxes = mser.detectRegions(binarized)
+    _, bboxes = mser.detectRegions(binarized)
 
     annotated = cv2.cvtColor(binarized, cv2.COLOR_GRAY2BGR)
 
