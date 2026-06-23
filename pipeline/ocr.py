@@ -32,7 +32,7 @@ def _get_reader() -> easyocr.Reader:
     if _reader is None:
         _reader = easyocr.Reader(
             ["en"],
-            gpu=False,
+            gpu=torch.cuda.is_available(),
             model_storage_directory=_MODEL_DIR,
             download_enabled=False,
             verbose=False,
