@@ -137,6 +137,10 @@ Sources:
 
 ## Installation
 
+Because the application uses Redis and Celery for background scanning tasks, **using Docker is highly recommended** for both development and production. Running the full stack directly on your host OS is more complex and requires a local Redis server.
+
+### Method 1: Docker (Recommended)
+
 1. Clone the repository.
 
 ```bash
@@ -144,72 +148,89 @@ git clone https://github.com/TheJaydenProject/doc-scanner-cv.git
 cd doc-scanner-cv
 ```
 
-2. Create and activate a virtual environment.
+2. Start the full application stack.
 
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
+**On Windows:**
+Simply run our automated startup script! It will check if your system has an NVIDIA GPU with at least 2GB of VRAM. If it does, it will automatically enable GPU acceleration for Docker, making your scans incredibly fast. Otherwise, it defaults to the CPU version.
+```powershell
+.\start_docker.ps1
 ```
 
-3. Install Python dependencies.
-
-```bash
-pip install -r requirements.txt
-```
-
-> **Note on Local GPU support:** By default, `requirements.txt` installs the CPU-only version of PyTorch to keep the production VPS footprint small. If you have a CUDA-capable GPU on your local development machine, you can drastically speed up OCR by replacing the CPU version with the GPU version:
-> ```bash
-> pip uninstall torch torchvision -y
-> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-> ```
-> The app will automatically detect your GPU and use it!
-
-4. Install Node dependencies and build the Vue frontend.
-
-```bash
-npm ci
-npm run build
-```
-
-> `vite build` empties `static/` before writing the bundle, which deletes the committed `static/docs.html` and `static/examples/` images (the Docker build restores them automatically — see `Dockerfile`). If running locally outside Docker, restore them with `git checkout static/docs.html static/examples/`.
-
-5. Start the development server.
-
-If you are just testing the production build locally:
-```bash
-python app.py
-```
-The application will be available at `http://localhost:5000`.
-
-If you are developing the frontend and want hot-module replacement (HMR), you must activate your virtual environment in your terminal first:
-
-```bash
-# Windows
-venv\Scripts\activate
-# macOS / Linux
-source venv/bin/activate
-
-npm run dev
-```
-This will start both the Flask API backend and the Vite frontend simultaneously. The frontend will be available at `http://localhost:5173`.
-
-**Docker (production)**
-
+**On Linux / macOS:**
+Start using standard Docker Compose:
 ```bash
 docker compose up --build
 ```
 
-The image runs `vue-tsc`, `biome check`, and `vite build` during the Docker build step. All three must pass before the container starts serving. For the Cloudflare Tunnel to connect, set `CLOUDFLARE_TUNNEL_TOKEN` in the host environment before starting.
+This single command builds the Vue frontend, installs all Python dependencies, starts a Redis container, spins up the Celery worker, and launches the Flask API. The application will be available at `http://localhost:5000`.
+
+For production deployment with Cloudflare Tunnel, set `CLOUDFLARE_TUNNEL_TOKEN` in your host environment before starting in detached mode:
 
 ```bash
 export CLOUDFLARE_TUNNEL_TOKEN=your_token_here
 docker compose up -d
 ```
+
+### Method 2: Local Development (Without Docker)
+
+Use this method only if you need Hot Module Replacement (HMR) for frontend development or want to use a local GPU natively for OCR. You must have [Redis installed and running](https://redis.io/docs/install/install-redis/) on your machine.
+
+1. Clone the repository and navigate into it.
+
+```bash
+git clone https://github.com/TheJaydenProject/doc-scanner-cv.git
+cd doc-scanner-cv
+```
+
+2. Install Python and Node dependencies, and build the frontend.
+
+**On Windows:**
+We provide an automated installation script that checks for an NVIDIA GPU, installs the correct CUDA version of PyTorch if supported, and installs the remaining backend requirements. First, create and activate your virtual environment:
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+.\install_native.ps1
+```
+
+**On Linux / macOS:**
+Create your virtual environment and install dependencies manually.
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r backend/requirements.txt
+```
+> **Note on Local GPU support (Linux/macOS):** By default, `requirements.txt` installs the CPU-only version of PyTorch. If you have a CUDA-capable GPU, you can speed up OCR by replacing it:
+> ```bash
+> pip uninstall torch torchvision -y
+> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+> ```
+
+After installing Python dependencies, build the frontend:
+```bash
+cd frontend
+npm ci
+npm run build
+cd ..
+```
+
+> **Note on Static Files:** `vite build` empties `backend/static/` before writing the bundle, which deletes the committed `docs.html` and `examples/` images (the Docker build restores them automatically). If running locally, restore them with `git checkout backend/static/docs.html backend/static/examples/`.
+
+3. Start the application stack. You will need to run these commands in separate terminal windows (with your virtual environment activated in each):
+
+**Terminal 1 (Celery Worker):**
+```bash
+cd backend
+# On Windows, you must use --pool=solo. On Linux/macOS, omit it.
+celery -A tasks.celery_app worker -l info --pool=solo
+```
+
+**Terminal 2 (Frontend & Backend Dev Servers):**
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173` with Hot Module Replacement, and the Flask API will run on `http://127.0.0.1:5000`.
 
 ---
 
@@ -375,7 +396,7 @@ pytest tests/ -v
 
 1. Fork the repository and create a branch: `git checkout -b feature/your-feature-name`
 2. Make your changes and verify the test suite passes: `pytest tests/ -v`
-3. Verify the frontend builds cleanly: `npm run build`
+3. Verify the frontend builds cleanly: `cd frontend && npm run build`
 4. Open a pull request against `main` with a description of what changed and why.
 
 Pushes to `main` run the full GitHub Actions pipeline (lint, type-check, test) and then auto-deploy to the production VPS if all checks pass — PRs run the same checks but never trigger deployment.
