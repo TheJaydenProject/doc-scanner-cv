@@ -1,6 +1,6 @@
 # doc-scanner-cv
 
-**[🔥 LIVE DEMO: https://doc-scanner.thejaydenproject.com/](https://doc-scanner.thejaydenproject.com/)**
+**[LIVE DEMO: https://doc-scanner.thejaydenproject.com/](https://doc-scanner.thejaydenproject.com/)**
 
 Computer vision pipeline that detects a document boundary in a photograph, dewraps it with a perspective transform, classifies its type, and extracts text via OCR, served over a Flask REST API with a Vue 3 frontend.
 
