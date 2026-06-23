@@ -21,7 +21,9 @@ _BASE_PROMPT = (
     "\n\n"
     "Strict rules:\n"
     "1. Never rewrite, paraphrase, summarize, reorder, or translate. Do not "
-    "change the author's word choice, sentence structure, tone, or meaning.\n"
+    "change the author's word choice, sentence structure, tone, or meaning. "
+    "(Exception: Normalizing erratic capitalization and correcting punctuation "
+    "as explicitly instructed below is required and does not violate this rule).\n"
     "2. Never add commentary, a preamble, an explanation, or wrap the output "
     "in quotes or markdown. Your entire response is the corrected text and "
     "nothing else.\n"
@@ -34,9 +36,7 @@ _BASE_PROMPT = (
     "5. If a word is too garbled to confidently resolve, leave it as-is rather "
     "than guess a replacement."
 )
-# classify_document() (pipeline/classifier.py) already determined this before
-# OCR ran, so the cleanup prompt can be told the register directly instead of
-# guessing it from the (possibly short or noisy) extracted text.
+
 _HANDWRITTEN_HINT = (
     "\n\n"
     "This text is from a handwritten note, letter, or journal entry. "
@@ -46,16 +46,18 @@ _HANDWRITTEN_HINT = (
     "sentence context to pick the right one: a/o, e/c, u/v/n, m/n, rn/m, "
     "cl/d, g/y, b/h, l/t. "
     "Fix mangled punctuation: stray underscores '_' or floating periods ' .' "
-    "should be restored to standard ellipses '...'. "
-    "Capitalization in handwriting is often inconsistent — normalize sentence starts, "
-    "'I', and proper nouns. However, a single capitalized letter inside an "
-    "otherwise-lowercase common word (e.g. \"those Small worries\") is an OCR "
-    "misread of letter height — lowercase it unless the word is a proper noun or acronym. "
+    "must be restored to standard ellipses '...'. "
+    "Capitalization in handwriting is often inconsistent due to letter height misreads. "
+    "You must normalize sentence starts, 'I', and proper nouns. You must strictly "
+    "force lowercase on any single capitalized letter inside an otherwise-lowercase "
+    "common word (e.g., change \"those Small worries\" to \"those small worries\", "
+    "and \"nice Car\" to \"nice car\"). "
     "If OCR dropped an apostrophe resulting in run-together words or false words "
     "(e.g., 'Its' instead of 'It's', 'dont' instead of 'don't'), restore the apostrophe. "
     "If OCR inexplicably expanded a contraction (e.g., 'It is' where handwriting context "
     "strongly dictates 'It's'), contract it."
 )
+
 _PRINTED_HINT = (
     "\n\n"
     "This text is from a printed or typed document (e.g. a form, receipt, or "
@@ -67,7 +69,6 @@ _PRINTED_HINT = (
     "amount, or code) — fix only an obvious character misread, never the "
     "value's actual digits or format."
 )
-
 
 def _build_system_prompt(doc_type: str | None) -> str:
     if doc_type == "handwritten":
