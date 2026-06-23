@@ -2,23 +2,18 @@ import numpy as np
 import cv2
 import pytest
 from app import create_app
+from tasks import celery_app, redis_client
+
+# Run Celery tasks synchronously in-process — tests have no separate worker.
+celery_app.conf.update(task_always_eager=True, task_eager_propagates=True)
 
 
 @pytest.fixture(autouse=True)
 def reset_scan_state():
-    """Reset module-level rate-limiting globals between tests for isolation."""
-    import api.documents as doc_api
-    doc_api._active_ips.clear()
-    doc_api._job_store.clear()
-    doc_api._job_ip.clear()
-    with doc_api._active_job_lock:
-        doc_api._active_job_count = 0
+    """Flush Redis job state between tests for isolation."""
+    redis_client.flushdb()
     yield
-    doc_api._active_ips.clear()
-    doc_api._job_store.clear()
-    doc_api._job_ip.clear()
-    with doc_api._active_job_lock:
-        doc_api._active_job_count = 0
+    redis_client.flushdb()
 
 
 @pytest.fixture

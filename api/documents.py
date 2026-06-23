@@ -9,7 +9,7 @@ from flask_limiter.util import get_remote_address
 from sqlalchemy import func
 
 from models import ScanRecord, db
-from tasks import celery_app, run_scan_job, redis_client
+from tasks import celery_app, run_scan_job, redis_client, get_job_state
 
 documents_bp = Blueprint("documents", __name__)
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
-STORAGE_DIR = "/app/storage"
+STORAGE_DIR = os.environ.get("STORAGE_DIR", "storage")
 
 # Ensure storage directory exists
 os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -57,10 +57,14 @@ def scan():
 
     # Dispatch Celery task
     task = run_scan_job.delay(job_id, file_path, file.filename or "upload")
-    
-    # Store Celery task_id so we can revoke it later
-    initial_state["celery_task_id"] = task.id
-    redis_client.set(f"job:{job_id}", json.dumps(initial_state), ex=86400)
+
+    # Merge celery_task_id into whatever state is current rather than
+    # overwriting outright: a very fast (or eager-mode) worker may have
+    # already written a real "complete"/"failed" result by this point, and
+    # blindly overwriting it with initial_state would clobber that result.
+    current_state = get_job_state(job_id) or initial_state
+    current_state["celery_task_id"] = task.id
+    redis_client.set(f"job:{job_id}", json.dumps(current_state), ex=86400)
 
     return jsonify({"job_id": job_id}), 202
 
