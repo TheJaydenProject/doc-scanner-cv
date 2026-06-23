@@ -31,14 +31,18 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Biome lint + format check
+        working-directory: frontend
         run: npx biome check src/
 
       - name: Type-check & build
+        working-directory: frontend
         # vue-tsc is the type-checker; vite build confirms the bundle compiles
         run: npm run build
 
@@ -65,6 +69,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install system deps required by OpenCV and the weight fetch
         run: |
@@ -76,22 +81,26 @@ jobs:
 
       - name: Install Python dependencies
         # requirements.txt carries the --extra-index-url for the torch +cpu wheels.
+        working-directory: backend
         run: pip install -r requirements.txt
 
       - name: Fetch EasyOCR model weights
         # Not committed to git (see README "OCR model weights"); app.py's
         # pre-warm needs them on disk before create_app() succeeds, so this
         # must run before any test that imports the app.
+        working-directory: backend
         run: bash scripts/fetch_ocr_weights.sh
 
       - name: Ruff lint
         # Ruff is not in requirements.txt because it's a dev-only tool.
         # Pinned here to keep CI deterministic; bump deliberately.
+        working-directory: backend
         run: |
           pip install ruff==0.4.4
           ruff check .
 
       - name: Run tests
+        working-directory: backend
         run: pytest tests/ -v --tb=short
 
   # ─── Deploy ──────────────────────────────────────────────────────────────────
@@ -125,7 +134,8 @@ jobs:
           # doc_classifier.onnx and doc_classifier.onnx.data at runtime.
           # scripts/ must be included: the Dockerfile's EasyOCR weight fetch
           # (COPY scripts/fetch_ocr_weights.sh .) needs it on the VPS to build.
-          source: "api,app.py,tasks.py,models.py,models,pipeline,scripts,requirements.txt,static,Dockerfile,.dockerignore,docker-compose.yml,package.json,package-lock.json,src,biome.json,tsconfig.json,vite.config.ts,index.html"
+          # All of these are inside the backend directory.
+          source: "backend,frontend,Dockerfile,.dockerignore,docker-compose.yml,docker-compose.gpu.yml,start_docker.ps1,install_native.ps1"
           target: "/home/${{ secrets.SSH_USER }}/deploy_staging_doc_scanner"
           strip_components: 0
 
