@@ -458,9 +458,9 @@ function showError(message: string) {
 
 <template>
   <section class="panel">
-    <h2>Upload</h2>
     <div class="upload-layout">
       <div class="upload-controls">
+        <h2>Upload</h2>
         <label for="file-input">Choose image (JPEG or PNG, max 20MB)</label>
 
         <input
@@ -527,8 +527,8 @@ function showError(message: string) {
 
 .upload-preview {
   flex: 0 0 auto;
-  width: 160px;
-  height: 160px;
+  width: 220px;
+  height: 220px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
