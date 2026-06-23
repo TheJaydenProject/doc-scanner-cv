@@ -152,7 +152,7 @@ jobs:
 
             echo "==> Building image..."
             cd "$APP"
-            docker compose build doc-scanner-cv
+            docker compose build doc-scanner-cv worker
 
             echo "==> Restarting containers..."
             docker compose up -d --remove-orphans
