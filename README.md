@@ -172,11 +172,17 @@ npm run build
 
 5. Start the development server.
 
+If you are just testing the production build locally:
 ```bash
 python app.py
 ```
+The application will be available at `http://localhost:5000`.
 
-The application is available at `http://localhost:5000`.
+If you are developing the frontend and want hot-module replacement (HMR), activate your virtual environment in a terminal and run:
+```bash
+npm run dev
+```
+This will start both the Flask API backend and the Vite frontend simultaneously. The frontend will be available at `http://localhost:5173`.
 
 **Docker (production)**
 
