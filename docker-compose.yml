@@ -35,7 +35,7 @@ services:
     # --concurrency matches MAX_CONCURRENT_SCANS (backend/tasks.py): no point
     # keeping idle worker child processes the application-level gate in
     # api/documents.py will never actually dispatch a 4th scan to.
-    command: celery -A tasks.celery_app worker -l info --concurrency=3 --max-memory-per-child=500000 --max-tasks-per-child=10
+    command: celery -A tasks.celery_app worker -l info --concurrency=3 --max-memory-per-child=2000000 --max-tasks-per-child=10
     environment:
       - OMP_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1

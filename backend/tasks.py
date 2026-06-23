@@ -22,7 +22,6 @@ from pipeline.scanner import (
 )
 from pipeline.superres import upscale
 from models import ScanRecord, db
-from celery.signals import worker_process_init
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -59,13 +58,6 @@ def get_flask_app():
         from app import create_app
         flask_app = create_app()
     return flask_app
-
-@worker_process_init.connect
-def init_worker(**kwargs):
-    app = get_flask_app()
-    with app.app_context():
-        from pipeline.ocr import _get_reader
-        _get_reader()
 
 def _median_text_height(detections: list[tuple[int, int, int, int]]) -> float | None:
     if len(detections) < MIN_DETECTION_SAMPLE_SIZE:
