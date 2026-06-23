@@ -161,6 +161,13 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> **Note on Local GPU support:** By default, `requirements.txt` installs the CPU-only version of PyTorch to keep the production VPS footprint small. If you have a CUDA-capable GPU on your local development machine, you can drastically speed up OCR by replacing the CPU version with the GPU version:
+> ```bash
+> pip uninstall torch torchvision -y
+> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+> ```
+> The app will automatically detect your GPU and use it!
+
 4. Install Node dependencies and build the Vue frontend.
 
 ```bash

@@ -1,4 +1,7 @@
-# PyTorch CPU wheels (torch/torchvision +cpu local-version tags live only here).
+# By default, this file installs the CPU-only version of PyTorch to keep the production
+# VPS deployment lightweight. If you have a CUDA-capable GPU for local development,
+# install the GPU version instead of the CPU version by running:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 flask==3.1.3
