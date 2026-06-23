@@ -24,7 +24,7 @@ ARG USE_GPU=false
 # (unless the USE_GPU flag changes). This prevents the massive 2.5GB download
 # from running again if you ever modify requirements.txt!
 RUN if [ "$USE_GPU" = "true" ]; then \
-      pip install --no-cache-dir torch==2.12.1 torchvision==0.27.1 --index-url https://download.pytorch.org/whl/cu121; \
+      pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121; \
     fi
 
 COPY backend/requirements.txt ./backend/
