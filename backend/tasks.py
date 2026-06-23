@@ -174,6 +174,10 @@ def run_scan_job(self, job_id: str, file_path: str, filename: str):
                     "doc_type_source": doc_type["source"],
                 },
             })
+            
+            # Instantly trigger the sync task to write this completed job to SQLite
+            # so the scan history populates immediately!
+            sync_redis_to_sqlite.delay()
 
     except ContourNotFoundError as e:
         update_job_state(job_id, {"status": "failed", "error": str(e)})
