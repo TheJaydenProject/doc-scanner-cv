@@ -148,7 +148,16 @@ git clone https://github.com/TheJaydenProject/doc-scanner-cv.git
 cd doc-scanner-cv
 ```
 
-2. Start the full application stack.
+2. Configure your environment variables.
+
+Copy the example configuration file and add your OpenRouter API key (required for LLM OCR cleanup).
+
+```bash
+cp .env.example .env
+```
+*(Open the `.env` file in a text editor and set `OPENROUTER_API_KEY=your_key_here`)*
+
+3. Start the full application stack.
 
 We have automated startup scripts that will dynamically check if your system has an NVIDIA GPU with at least 2GB of VRAM and enable GPU acceleration.
 
