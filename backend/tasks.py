@@ -162,6 +162,7 @@ def run_scan_job(self, job_id: str, file_path: str, filename: str):
 
             update_job_state(job_id, {
                 "status": "complete",
+                "filename": filename,
                 "result": {
                     "text": text,
                     "char_count": len(text),
