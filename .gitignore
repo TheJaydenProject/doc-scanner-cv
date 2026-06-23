@@ -69,6 +69,7 @@ test_images/
 # Built frontend assets (Vite output)
 static/index.html
 static/assets/
+.vite/
 
 # Generic Build and Dependency Directories
 # Must be customized based on your specific stack (e.g., node_modules, venv, bin)
