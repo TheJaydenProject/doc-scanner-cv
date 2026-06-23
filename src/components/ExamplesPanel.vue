@@ -20,7 +20,8 @@ const lightboxVisible = ref(false);
 
 function stageSrc(ex: Example, stage: (typeof STAGES)[number]): string {
   const ext = stage === "raw" ? ex.originalExt : "png";
-  return `/examples/${ex.id}_${stage}.${ext}`;
+  const prefix = import.meta.env.DEV ? "/static" : "";
+  return `${prefix}/examples/${ex.id}_${stage}.${ext}`;
 }
 
 function openLightbox(src: string) {

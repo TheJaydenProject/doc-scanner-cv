@@ -1,16 +1,44 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: doc-scanner-redis
+    restart: always
+    networks:
+      - internal
+
   doc-scanner-cv:
     build: .
     container_name: doc-scanner-cv
     restart: unless-stopped
+    command: ["python", "-m", "gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:create_app()"]
     environment:
       # Read from the host .env (compose substitutes ${...}). Required for OCR
       # cleanup; if unset the app simply skips cleanup and returns raw text.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./data:/app/instance   # Persists scans.db outside the container
+      - shared-uploads:/app/storage
     expose:
       - "5000"
+    depends_on:
+      - redis
+    networks:
+      - internal
+
+  worker:
+    build: .
+    container_name: doc-scanner-worker
+    restart: unless-stopped
+    command: ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/instance
+      - shared-uploads:/app/storage
+    depends_on:
+      - redis
     networks:
       - internal
 
@@ -29,3 +57,6 @@ services:
 networks:
   internal:
     driver: bridge
+
+volumes:
+  shared-uploads:

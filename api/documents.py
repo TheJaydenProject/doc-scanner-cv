@@ -1,265 +1,31 @@
-import base64
+import json
 import logging
-import statistics
-import time
+import os
 import uuid
-from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
 
-import cv2
-from flask import Blueprint, Flask, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from sqlalchemy import func
 
 from models import ScanRecord, db
-from pipeline.classifier import classify_document
-from pipeline.detector import detect_text_regions
-from pipeline.openrouter import correct_ocr_text
-from pipeline.ocr import extract_text
-from pipeline.scanner import (
-    ContourNotFoundError,
-    binarize_handwritten,
-    binarize_printed,
-    remove_ruled_lines,
-    run_pipeline,
-)
-from pipeline.superres import upscale
+from tasks import celery_app, run_scan_job, redis_client
 
 documents_bp = Blueprint("documents", __name__)
-
 logger = logging.getLogger(__name__)
 
 # Global rate limiter — init_app() called in app factory.
 limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
-# 3 workers max. A 4th concurrent scan is rejected with 429.
-# Keeps the CV pipeline from saturating the VPS CPU.
-executor = ThreadPoolExecutor(max_workers=3)
-
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
-_MAX_CONCURRENT_GLOBAL = 3
+STORAGE_DIR = "/app/storage"
 
-# Below this median MSER text-box height, OCR accuracy degrades sharply, so the
-# scan is routed through FSRCNN super-resolution before OCR rather than read at
-# native resolution (see pipeline/superres.py).
-MIN_TEXT_HEIGHT_PX = 30
-# Below this, even 3x upscaling can't reach a legible size (3x*8 = 24px is the
-# practical floor; sub-8px text super-resolves to mush), so still reject outright.
-UPSCALE_FLOOR_PX = 8
-# Fewer detections than this and the median is too volatile (one short
-# character or punctuation box can swing it) — skip the gate, let OCR run.
-MIN_DETECTION_SAMPLE_SIZE = 5
-
-# Tracks IPs with a scan currently in-flight.
-_active_ips: set[str] = set()
-
-# Explicit counter for in-flight jobs.
-# Avoids accessing executor._work_queue, which is a private CPython API
-# that is not guaranteed to exist across implementations or future versions.
-_active_job_count: int = 0
-_active_job_lock = Lock()
-
-# job_id -> ip, for jobs whose IP/count slot hasn't been released yet.
-# Cancellation (cancel_job) and natural completion (_run_scan_job's finally)
-# race to release the same slot; popping this under _active_job_lock makes
-# whichever happens first the sole releaser and the other a no-op, so the
-# slot is never double-released (which would let _active_job_count drift
-# negative and silently raise the real concurrency cap above _MAX_CONCURRENT_GLOBAL).
-_job_ip: dict[str, str] = {}
-
-
-def _release_job_slot(job_id: str) -> None:
-    global _active_job_count
-    with _active_job_lock:
-        ip = _job_ip.pop(job_id, None)
-        if ip is None:
-            return
-        _active_ips.discard(ip)
-        _active_job_count -= 1
-
-
-# In-memory job store. Maps job_id -> { status, result | error }.
-# OrderedDict so eviction always removes the oldest entry.
-# A production system would use Redis or a dedicated jobs table.
-_job_store: OrderedDict = OrderedDict()
-_JOB_STORE_MAX = 200
-_JOB_STORE_EVICT = 50
-
-
-def _evict_job_store() -> None:
-    while len(_job_store) > _JOB_STORE_MAX:
-        for _ in range(_JOB_STORE_EVICT):
-            if _job_store:
-                _job_store.popitem(last=False)
-
-
-def _is_cancelled(job_id: str) -> bool:
-    job = _job_store.get(job_id)
-    return job is not None and job.get("status") == "cancelled"
-
-
-def _median_text_height(
-    detections: list[tuple[int, int, int, int]],
-) -> float | None:
-    """
-    Median height of MSER text-box detections, or None if there are too
-    few boxes for the median to be a reliable signal (MIN_DETECTION_SAMPLE_SIZE).
-    """
-    if len(detections) < MIN_DETECTION_SAMPLE_SIZE:
-        return None
-    return statistics.median(h for (_, _, _, h) in detections)
-
-
-def _run_scan_job(
-    app: Flask, job_id: str, image_bytes: bytes, filename: str
-) -> None:
-    """
-    Runs in a background thread via ThreadPoolExecutor.
-    Receives the app instance directly to avoid creating a second app,
-    then pushes an application context for DB access.
-    Always releases the job's IP/count slot (via _release_job_slot) on
-    completion or failure.
-    """
-    with app.app_context():
-        start = time.time()
-
-        try:
-            clean_image, _ = run_pipeline(image_bytes)
-
-            # Classify before any destructive pixel alteration — the clean,
-            # warped image carries far more signal than a binarized one.
-            doc_type = classify_document(clean_image)
-
-            if doc_type["label"] == "printed":
-                binarized = binarize_printed(clean_image)
-            else:
-                binarized = binarize_handwritten(clean_image)
-
-            # Ruled lines confuse MSER, so strip them before detection. The
-            # binarize -> remove_ruled_lines -> MSER chain now serves only the
-            # resolution gate and the detection-count stat; OCR reads the
-            # non-binarized clean_image directly (migrate-plan D2/D3).
-            cleaned = remove_ruled_lines(binarized)
-
-            _, detections = detect_text_regions(cleaned)
-
-            median_height = _median_text_height(detections)
-            if median_height is not None and median_height < UPSCALE_FLOOR_PX:
-                logger.warning(
-                    "Job %s rejected: RESOLUTION_TOO_LOW (median text height %.1fpx, n=%d)",
-                    job_id,
-                    median_height,
-                    len(detections),
-                )
-                _job_store[job_id] = {
-                    "status": "failed",
-                    "error": (
-                        "Text is too small to scan accurately. Please capture a "
-                        "higher-resolution image or move the camera closer to the document."
-                    ),
-                }
-                return
-
-            # Small-but-recoverable text: super-resolve the whole warped frame so
-            # EasyOCR's detector/recognizer read sharper glyphs. upscale() no-ops on
-            # images already large enough (its own memory guard), so this is safe to
-            # call whenever the gate trips. detection_count below stays the
-            # pre-upscale count — it's only a stat, not used downstream.
-            upscale_secs = 0.0
-            if median_height is not None and median_height < MIN_TEXT_HEIGHT_PX:
-                logger.info(
-                    "Job %s: upscaling (median text height %.1fpx < %dpx)",
-                    job_id,
-                    median_height,
-                    MIN_TEXT_HEIGHT_PX,
-                )
-                # Mutated in place (not a full _job_store[job_id] = {...} replace)
-                # so a concurrent cancel_job() setting job["status"] = "cancelled"
-                # on this same dict can't be clobbered by this write landing after
-                # it but before the next _is_cancelled() checkpoint. Lets the
-                # frontend recalibrate its ETA once it knows the slow path fired.
-                _job_store[job_id]["stage"] = "upscaling"
-                _upscale_start = time.perf_counter()
-                clean_image = upscale(clean_image, median_height)
-                upscale_secs = time.perf_counter() - _upscale_start
-
-            # The frontend gives up polling after a fixed budget and calls
-            # DELETE /jobs/<id> when it does; checking here before the two
-            # most expensive remaining stages stops a now-abandoned job from
-            # burning more CPU/network than it has to.
-            if _is_cancelled(job_id):
-                return
-
-            _ocr_start = time.perf_counter()
-            text = extract_text(clean_image)
-            ocr_secs = time.perf_counter() - _ocr_start
-            # Splits the gate's added cost so the upscale-vs-OCR ratio is visible
-            # in logs when tuning factor/method (see pipeline/superres.py).
-            logger.info(
-                "Job %s timing: upscale=%.1fs ocr=%.1fs", job_id, upscale_secs, ocr_secs
-            )
-
-            if _is_cancelled(job_id):
-                return
-
-            # Best-effort OpenRouter (DeepSeek V4 Flash) cleanup of OCR spelling/punctuation/casing.
-            # No-ops (returns text unchanged) if the key is unset or the call
-            # fails, so it never breaks a scan. doc_type tailors the prompt to
-            # printed vs. handwritten register. All downstream counts/storage
-            # use the corrected text.
-            text = correct_ocr_text(text, doc_type["label"])
-
-            def encode_png(image) -> str:
-                _, buffer = cv2.imencode(".png", image)
-                return base64.b64encode(buffer).decode("utf-8")
-
-            warped_image_b64 = encode_png(clean_image)
-
-            elapsed_ms = int((time.time() - start) * 1000)
-
-            record = ScanRecord(
-                filename=filename,
-                char_count=len(text),
-                word_count=len(text.split()),
-                processing_time_ms=elapsed_ms,
-            )
-            db.session.add(record)
-            db.session.commit()
-
-            _job_store[job_id] = {
-                "status": "complete",
-                "result": {
-                    "text": text,
-                    "char_count": len(text),
-                    "word_count": len(text.split()),
-                    "processing_time_ms": elapsed_ms,
-                    "warped_image_b64": warped_image_b64,
-                    "detection_count": len(detections),
-                    "doc_type": doc_type["label"],
-                    "doc_type_confidence": doc_type["confidence"],
-                    "doc_type_source": doc_type["source"],
-                },
-            }
-
-        except ContourNotFoundError as e:
-            _job_store[job_id] = {"status": "failed", "error": str(e)}
-        except Exception:
-            _job_store[job_id] = {
-                "status": "failed",
-                "error": "Internal processing error.",
-            }
-        finally:
-            # Releases the slot unless cancel_job() already did (see _job_ip).
-            _release_job_slot(job_id)
-
+# Ensure storage directory exists
+os.makedirs(STORAGE_DIR, exist_ok=True)
 
 @documents_bp.route("/scan", methods=["POST"])
 @limiter.limit("20 per hour")
 def scan():
-    global _active_job_count
-
     if "file" not in request.files:
         return jsonify({"error": "No file provided."}), 400
 
@@ -275,39 +41,38 @@ def scan():
     if len(image_bytes) == 0:
         return jsonify({"error": "Empty file."}), 400
 
-    ip = get_remote_address()
-
-    if ip in _active_ips:
-        return jsonify(
-            {"error": "A scan is already in progress for your IP. Please wait."}
-        ), 429
-
-    with _active_job_lock:
-        if _active_job_count >= _MAX_CONCURRENT_GLOBAL:
-            return jsonify(
-                {"error": "Server is at capacity. Please try again shortly."}
-            ), 429
-        _active_job_count += 1
-
     job_id = str(uuid.uuid4())
-    _job_store[job_id] = {"status": "processing"}
-    _evict_job_store()
-    _active_ips.add(ip)
-    _job_ip[job_id] = ip
+    file_path = os.path.join(STORAGE_DIR, f"{job_id}.png")
+    
+    # Save file to shared volume
+    with open(file_path, "wb") as f:
+        f.write(image_bytes)
 
-    app = current_app._get_current_object()
-    executor.submit(_run_scan_job, app, job_id, image_bytes, file.filename or "upload")
+    # Initialize job state in Redis
+    initial_state = {
+        "status": "processing",
+        "filename": file.filename or "upload"
+    }
+    redis_client.set(f"job:{job_id}", json.dumps(initial_state), ex=86400)
+
+    # Dispatch Celery task
+    task = run_scan_job.delay(job_id, file_path, file.filename or "upload")
+    
+    # Store Celery task_id so we can revoke it later
+    initial_state["celery_task_id"] = task.id
+    redis_client.set(f"job:{job_id}", json.dumps(initial_state), ex=86400)
 
     return jsonify({"job_id": job_id}), 202
 
 
 @documents_bp.route("/jobs/<job_id>", methods=["GET"])
 def get_job(job_id: str):
-    job = _job_store.get(job_id)
-
-    if job is None:
+    raw = redis_client.get(f"job:{job_id}")
+    
+    if not raw:
         return jsonify({"error": "Job not found."}), 404
 
+    job = json.loads(raw)
     return jsonify(job), 200
 
 
@@ -315,20 +80,22 @@ def get_job(job_id: str):
 def cancel_job(job_id: str):
     """
     Cancellation: the frontend calls this on Stop, or when it gives up
-    polling. Only flips a still-processing job to "cancelled" so
-    _run_scan_job can bail at its next checkpoint; a job that already
-    finished is left alone so this can never clobber a real result.
-
-    Also releases the IP/count slot immediately rather than waiting for the
-    background thread to notice the cancellation flag — otherwise a quick
-    Stop-then-Scan from the same IP could still hit "a scan is already in
-    progress" for however long the abandoned job takes to reach its next
-    checkpoint.
+    polling. Revokes the Celery task via SIGKILL if it's currently running.
     """
-    job = _job_store.get(job_id)
-    if job is not None and job.get("status") == "processing":
-        job["status"] = "cancelled"
-        _release_job_slot(job_id)
+    raw = redis_client.get(f"job:{job_id}")
+    
+    if raw:
+        job = json.loads(raw)
+        if job.get("status") == "processing":
+            # Forcefully terminate the worker if it's stuck in OCR
+            task_id = job.get("celery_task_id")
+            if task_id:
+                celery_app.control.revoke(task_id, terminate=True, signal='SIGKILL')
+            
+            # Update Redis state
+            job["status"] = "cancelled"
+            redis_client.set(f"job:{job_id}", json.dumps(job), ex=86400)
+            
     return jsonify({"status": "ok"}), 200
 
 

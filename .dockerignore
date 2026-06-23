@@ -2,3 +2,14 @@
 # (see Dockerfile). Excluded here so a local developer's already-fetched
 # copy can never silently mask the same build-time fetch CI/deploy relies on.
 models/easyocr/
+
+# Ignore local dependency directories to drastically speed up docker build context transfer
+node_modules/
+venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+data/
+instance/

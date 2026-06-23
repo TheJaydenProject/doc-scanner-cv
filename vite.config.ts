@@ -3,6 +3,11 @@ import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
+  server: {
+    proxy: {
+      "/api": "http://127.0.0.1:5000"
+    }
+  },
   build: {
     outDir: "static",
     // static/ also holds committed source assets (examples/, docs.html) that are

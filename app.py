@@ -1,4 +1,4 @@
-import atexit
+
 
 import cv2
 from flask import Flask, send_from_directory
@@ -10,7 +10,17 @@ except ImportError:
     pass
 
 from models import db
-from api.documents import documents_bp, executor, limiter
+from api.documents import documents_bp, limiter
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    if type(dbapi_connection).__name__ == "sqlite3.Connection" or "sqlite" in str(type(dbapi_connection)):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", static_url_path="")
@@ -40,16 +50,6 @@ def create_app() -> Flask:
 
     with app.app_context():
         db.create_all()
-
-    # Pre-warm the EasyOCR reader at boot (single gunicorn worker) so the first
-    # scan after a deploy doesn't pay the torch import + ~100MB model load on the
-    # request path (R4). Fails loud here if the offline weights are missing.
-    from pipeline.ocr import _get_reader
-    _get_reader()
-
-    # Cleanly drain the thread pool on interpreter shutdown.
-    # Without this, background threads may be killed mid-scan on Ctrl+C.
-    atexit.register(executor.shutdown, wait=True)
 
     return app
 
