@@ -15,8 +15,8 @@ try {
 
 if ($hasGpu) {
     Write-Host "NVIDIA GPU with >= 2GB VRAM detected. Starting Docker with GPU support..." -ForegroundColor Green
-    docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+    docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build $args
 } else {
     Write-Host "No suitable NVIDIA GPU detected. Starting Docker with CPU only..." -ForegroundColor Yellow
-    docker compose up --build
+    docker compose up --build $args
 }
