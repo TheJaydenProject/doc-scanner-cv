@@ -2,10 +2,10 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import type { ScanResult } from "../types";
 
-const POLL_INTERVAL_MS = 1500;
+const POLL_INTERVAL_MS = 4000;
 // 120s budget (was 60s) — the VPS's CPU-only OCR routinely overruns the old
 // budget on larger/handwritten scans, which killed otherwise-successful jobs.
-const POLL_MAX_ATTEMPTS = 80;
+const POLL_MAX_ATTEMPTS = 30;
 // Matches app.py's MAX_CONTENT_LENGTH — checked client-side so an oversized
 // file is rejected instantly instead of round-tripping to the server first.
 const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
