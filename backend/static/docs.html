@@ -348,7 +348,8 @@
         <h2>Async Job Flow</h2>
         <div class="flow">
           POST /api/documents/scan &#x2192; 202 { job_id }<br />
-          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; poll every 4s, up to 30 attempts<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; poll every 4s, up to 30 attempts (90
+          if stage becomes "upscaling")<br />
           GET /api/documents/jobs/&lt;job_id&gt; &#x2192; { status: "processing"
           }<br />
           &nbsp;&nbsp;&nbsp;&nbsp;&#x2193; when ready, or DELETE the job to
@@ -431,8 +432,12 @@ Body: file=&lt;image.jpg&gt;
           <p class="endpoint-desc">
             Polls the status of a scan job. Returns processing (optionally with
             <code>stage: "upscaling"</code>), complete, failed, or cancelled.
-            The frontend polls every 4 seconds and gives up after 30 attempts
-            (2 minutes), cancelling the job and showing a timeout error.
+            The frontend polls every 4 seconds and normally gives up after 30
+            attempts (2 minutes); once it sees <code>stage: "upscaling"</code>
+            that budget triples to 90 attempts (6 minutes), since FSRCNN
+            super-resolution plus OCR routinely takes longer than the base
+            budget on the CPU-only VPS. Giving up cancels the job and shows a
+            timeout error.
           </p>
           <table>
             <thead>

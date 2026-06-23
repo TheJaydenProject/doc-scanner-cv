@@ -369,12 +369,18 @@ function cancelJob(jobId: string) {
 
 function pollJob(jobId: string, file: File | null): void {
   let attempts = 0;
+  // Raised to POLL_MAX_ATTEMPTS * UPSCALE_ESTIMATE_MULTIPLIER once the server
+  // reports stage: "upscaling" — that FSRCNN pass plus OCR routinely overruns
+  // the base budget on the CPU-only VPS, and until now only the *displayed*
+  // ETA (rescaleEstimateForUpscale) accounted for that, not this real cutoff,
+  // so the frontend was cancelling otherwise-healthy upscaling jobs itself.
+  let maxAttempts = POLL_MAX_ATTEMPTS;
   stopPolling(); // never run two poll loops at once (e.g. resume + a stray)
 
   pollInterval = setInterval(async () => {
     attempts++;
 
-    if (attempts > POLL_MAX_ATTEMPTS) {
+    if (attempts > maxAttempts) {
       stopPolling();
       cancelJob(jobId);
       clearActiveScan();
@@ -388,7 +394,10 @@ function pollJob(jobId: string, file: File | null): void {
       const job = await res.json();
 
       if (job.status === "processing") {
-        if (job.stage === "upscaling") rescaleEstimateForUpscale();
+        if (job.stage === "upscaling") {
+          rescaleEstimateForUpscale();
+          maxAttempts = POLL_MAX_ATTEMPTS * UPSCALE_ESTIMATE_MULTIPLIER;
+        }
       } else if (job.status === "complete") {
         stopPolling();
         stopProgressTimer();
