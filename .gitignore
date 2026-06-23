@@ -83,6 +83,8 @@ coverage/
 .nyc_output/
 __pycache__/
 *.pyc
+.pytest_cache
+.ruff_cache
 
 # Archives
 *.7z
