@@ -580,6 +580,30 @@ canvas {
   transition: width 0.15s linear;
 }
 
+/* #scan-btn while a scan is running: same button, now doubling as Cancel.
+   Ghost/outline instead of the solid primary fill, so it visually reads as
+   the lower-commitment action without competing with Scan Document's weight
+   anywhere else on the page. */
+#scan-btn.is-cancel {
+  background: transparent;
+  color: var(--ink-secondary);
+  border: 1px solid var(--control-border);
+}
+
+#scan-btn.is-cancel:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--border-strong);
+  background: transparent;
+  transform: none;
+  box-shadow: none;
+}
+
+#scan-btn.is-cancel:active:not(:disabled) {
+  transform: scale(0.97);
+  background: transparent;
+  box-shadow: none;
+}
+
 /* Visually hidden but accessible file input */
 .sr-only {
   position: absolute;

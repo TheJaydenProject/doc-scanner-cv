@@ -11,7 +11,10 @@ const file = ref<File | null>(null);
 const dashboardRef = ref<InstanceType<typeof Dashboard> | null>(null);
 const rightView = ref<"examples" | "results">("examples");
 
-function onScanComplete(scanResult: ScanResult, scanFile: File) {
+// scanFile is null for a scan resumed after a page refresh — the original
+// File can't survive the reload, so the Raw-image preview is unavailable
+// (ResultPanel falls back to an empty source) but everything else shows.
+function onScanComplete(scanResult: ScanResult, scanFile: File | null) {
   result.value = scanResult;
   file.value = scanFile;
   rightView.value = "results";

@@ -13,6 +13,18 @@ const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 // error is deterministic on retry, so the file selection gets cleared
 // instead of just re-enabling the Scan button like other failures.
 const RESOLUTION_ERROR_SIGNATURE = "too small to scan accurately";
+// A scan runs server-side and outlives a page refresh, but the frontend's
+// in-memory state does not — so the running job's id is parked here and
+// reclaimed on mount. Without this, a refresh orphans the job: the backend
+// still has the IP marked busy, so the next scan is rejected with "a scan is
+// already in progress" until that job finishes on its own.
+const ACTIVE_SCAN_KEY = "docScannerActiveScan";
+
+interface StoredScan {
+  jobId: string;
+  startTime: number;
+  estimatedDurationMs: number;
+}
 
 // Used until /api/documents/metrics reports a real average (e.g. first scan
 // after a fresh deploy, with no scan history yet).
@@ -35,8 +47,6 @@ const PROGRESS_CEILING = 99;
 // exponential: a 1/x tail decays much slower than e^-x, so it keeps producing
 // visible whole-percent ticks for minutes into an overrun instead of
 // saturating near PROGRESS_CEILING within ~25s and then sitting frozen.
-// Also sizes the ETA's renewal chunk (see startProgressTimer) — same "how
-// big a step feels reasonable" question for both.
 const OVERRUN_STEP_MS = 15000;
 
 // The backend's average processing time is assumed to correspond to a scan of
@@ -49,7 +59,7 @@ const MIN_SIZE_MULTIPLIER = 0.5;
 const MAX_SIZE_MULTIPLIER = 2;
 
 const emit = defineEmits<{
-  "scan-complete": [result: ScanResult, file: File];
+  "scan-complete": [result: ScanResult, file: File | null];
 }>();
 
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -58,26 +68,65 @@ const loading = ref(false);
 const error = ref("");
 const scanDisabled = ref(true);
 const progressPercent = ref(0);
+// Phase 1 (within estimate): a countdown toward the estimated finish.
 const secondsRemaining = ref(0);
+// Phase 2 (past the estimate): a stopwatch of total time so far. Once the
+// estimate is provably wrong we can't honestly predict what's left, so we
+// stop counting down (a wrong countdown can only freeze or reset, both of
+// which look broken) and switch to elapsed time, which only ever increases —
+// never resets, never freezes, never lies about being almost done.
+const secondsElapsed = ref(0);
+const inOverrun = ref(false);
 
 const progressLabel = computed(() => {
-  // At completion the poll sets 100% / 0s; drop the "0s left" tail there.
+  // At completion the poll sets 100%; drop the time tail there.
   if (progressPercent.value >= 100) return "Processing… 100%";
+  // Single labeled handoff: "≈Ns left" while the estimate holds, then
+  // "Ns elapsed" once it doesn't. The label changing alongside the number is
+  // what makes the one transition read as a different metric, not a reset.
+  if (inOverrun.value) {
+    return `Processing… ${progressPercent.value}% · ${secondsElapsed.value}s elapsed`;
+  }
   return `Processing… ${progressPercent.value}% · ≈${secondsRemaining.value}s left`;
 });
+
+// The in-flight job's id, exposed so the Stop button knows what to cancel.
+const activeJobId = ref<string | null>(null);
 
 // Average processing time from /metrics, before per-file size scaling.
 let baseAverageMs = DEFAULT_ESTIMATE_MS;
 // Size-scaled estimate for the current scan; set in startProgressTimer().
 let estimatedDurationMs = DEFAULT_ESTIMATE_MS;
-// Independent of the percent curve below: the wall-clock moment the ETA
-// countdown is currently aimed at. Pushed back by OVERRUN_STEP_MS whenever
-// elapsed time catches up to it but the job is still running, so the
-// countdown always shows a real number ticking down instead of one that's
-// forced toward zero just because percent looks close to the ceiling.
-let etaTargetMs = DEFAULT_ESTIMATE_MS;
 let progressTimer: ReturnType<typeof setInterval> | null = null;
+// Module-scoped (not local to pollJob) so Stop and resume can clear it too.
+let pollInterval: ReturnType<typeof setInterval> | null = null;
 let scanStartTime = 0;
+
+function saveActiveScan(jobId: string) {
+  try {
+    const stored: StoredScan = { jobId, startTime: scanStartTime, estimatedDurationMs };
+    localStorage.setItem(ACTIVE_SCAN_KEY, JSON.stringify(stored));
+  } catch {
+    // Private-mode / disabled storage: resume-on-refresh just won't work.
+  }
+}
+
+function clearActiveScan() {
+  try {
+    localStorage.removeItem(ACTIVE_SCAN_KEY);
+  } catch {
+    // No-op — nothing to clear if storage is unavailable.
+  }
+}
+
+function readActiveScan(): StoredScan | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_SCAN_KEY);
+    return raw ? (JSON.parse(raw) as StoredScan) : null;
+  } catch {
+    return null;
+  }
+}
 
 onMounted(async () => {
   try {
@@ -90,56 +139,107 @@ onMounted(async () => {
   } catch {
     // Keep DEFAULT_ESTIMATE_MS — the progress bar still works, just less precisely.
   }
+
+  // After metrics so a resumed scan that overruns can still lean on a real
+  // average if it ever needs a fresh estimate.
+  const stored = readActiveScan();
+  if (stored) await resumeScan(stored);
 });
+
+// Reconnect to a job left running by a previous page load.
+async function resumeScan(stored: StoredScan): Promise<void> {
+  try {
+    const res = await fetch(`/api/documents/jobs/${stored.jobId}`);
+    if (!res.ok) {
+      // 404: job already evicted from the store. Nothing to resume.
+      clearActiveScan();
+      return;
+    }
+    const job = await res.json();
+
+    if (job.status === "complete") {
+      clearActiveScan();
+      emit("scan-complete", job.result as ScanResult, null);
+      return;
+    }
+    if (job.status === "processing") {
+      loading.value = true;
+      scanDisabled.value = true;
+      activeJobId.value = stored.jobId;
+      runProgressTimer(stored.startTime, stored.estimatedDurationMs);
+      pollJob(stored.jobId, null);
+      return;
+    }
+    // failed / cancelled / anything else: nothing to show, just clear.
+    clearActiveScan();
+  } catch {
+    // Network error reaching the server — don't strand the user in a
+    // loading state; let them start fresh.
+    clearActiveScan();
+  }
+}
 
 function startProgressTimer(fileSizeBytes: number) {
   const sizeMultiplier = Math.min(
     Math.max(fileSizeBytes / REFERENCE_FILE_SIZE_BYTES, MIN_SIZE_MULTIPLIER),
     MAX_SIZE_MULTIPLIER,
   );
-  estimatedDurationMs = baseAverageMs * sizeMultiplier * OVERESTIMATE_FACTOR;
-  etaTargetMs = estimatedDurationMs;
+  const estimate = baseAverageMs * sizeMultiplier * OVERESTIMATE_FACTOR;
+  runProgressTimer(Date.now(), estimate);
+}
 
-  scanStartTime = Date.now();
-  progressPercent.value = 0;
-  secondsRemaining.value = Math.ceil(estimatedDurationMs / 1000);
+// Drives the progress bar from a start time + estimate. Split out from
+// startProgressTimer so a resumed scan can pass the original (stored) start
+// time, keeping the bar/elapsed continuous across a refresh.
+function runProgressTimer(startTime: number, estimateMs: number) {
+  scanStartTime = startTime;
+  estimatedDurationMs = estimateMs;
+  inOverrun.value = false;
 
-  progressTimer = setInterval(() => {
+  const tick = () => {
     const elapsed = Date.now() - scanStartTime;
 
-    // Percent: whole numbers only, one curve, no phase-boundary jump.
     if (elapsed < estimatedDurationMs) {
-      // Linear phase: rise from 0 to the soft cap over the estimated duration.
+      // Phase 1 — estimate still holds.
+      // Percent: linear rise from 0 to the soft cap over the estimated duration.
       const ratio = elapsed / estimatedDurationMs;
       progressPercent.value = Math.round(ratio * PROGRESS_SOFT_CAP);
+      // ETA: honest countdown toward the estimated finish.
+      secondsRemaining.value = Math.ceil((estimatedDurationMs - elapsed) / 1000);
     } else {
-      // Overrun phase: estimate was too low. overrun/(overrun+step) starts at
-      // 0 right where the linear phase left off (no jump) and keeps rising
-      // toward 1 — slowly enough to stay incremental well past a minute of
-      // overrun, but never actually reaching the ceiling.
+      // Phase 2 — estimate was too low.
+      inOverrun.value = true;
+      // Percent: overrun/(overrun+step) starts at 0 right where the linear
+      // phase left off (no jump) and keeps rising toward 1 — slowly enough to
+      // stay incremental well past a minute of overrun, never reaching the
+      // ceiling.
       const overrun = elapsed - estimatedDurationMs;
       const headroom = PROGRESS_CEILING - PROGRESS_SOFT_CAP;
       progressPercent.value = Math.round(
         PROGRESS_SOFT_CAP + headroom * (overrun / (overrun + OVERRUN_STEP_MS)),
       );
+      // Time: count total elapsed up. Monotonic by construction, so it can
+      // never reset, and it ticks every second, so it can never look frozen
+      // even while percent is creeping slowly near the ceiling.
+      secondsElapsed.value = Math.floor(elapsed / 1000);
     }
+  };
 
-    // ETA: a separate, honest countdown against etaTargetMs. Deliberately not
-    // derived from the percent curve above, so it never gets dragged toward
-    // "1s left" just because percent is sitting near the ceiling — instead it
-    // counts down normally and, if the job is still running when it would
-    // hit zero, renews with another real step rather than freezing at zero.
-    while (elapsed >= etaTargetMs) {
-      etaTargetMs += OVERRUN_STEP_MS;
-    }
-    secondsRemaining.value = Math.ceil((etaTargetMs - elapsed) / 1000);
-  }, PROGRESS_TICK_MS);
+  tick(); // Render immediately so a resume doesn't flash 0% for one tick.
+  progressTimer = setInterval(tick, PROGRESS_TICK_MS);
 }
 
 function stopProgressTimer() {
   if (progressTimer !== null) {
     clearInterval(progressTimer);
     progressTimer = null;
+  }
+}
+
+function stopPolling() {
+  if (pollInterval !== null) {
+    clearInterval(pollInterval);
+    pollInterval = null;
   }
 }
 
@@ -212,7 +312,10 @@ async function onScan() {
     return;
   }
 
-  await pollJob(jobId, file);
+  activeJobId.value = jobId;
+  // Park the job so a refresh can reconnect instead of orphaning it.
+  saveActiveScan(jobId);
+  pollJob(jobId, file);
 }
 
 function cancelJob(jobId: string) {
@@ -222,15 +325,18 @@ function cancelJob(jobId: string) {
   fetch(`/api/documents/jobs/${jobId}`, { method: "DELETE" }).catch(() => {});
 }
 
-async function pollJob(jobId: string, file: File): Promise<void> {
+function pollJob(jobId: string, file: File | null): void {
   let attempts = 0;
+  stopPolling(); // never run two poll loops at once (e.g. resume + a stray)
 
-  const interval = setInterval(async () => {
+  pollInterval = setInterval(async () => {
     attempts++;
 
     if (attempts > POLL_MAX_ATTEMPTS) {
-      clearInterval(interval);
+      stopPolling();
       cancelJob(jobId);
+      clearActiveScan();
+      activeJobId.value = null;
       showError("Processing timed out. Please try again.");
       return;
     }
@@ -240,8 +346,10 @@ async function pollJob(jobId: string, file: File): Promise<void> {
       const job = await res.json();
 
       if (job.status === "complete") {
-        clearInterval(interval);
+        stopPolling();
         stopProgressTimer();
+        clearActiveScan();
+        activeJobId.value = null;
         progressPercent.value = 100;
         secondsRemaining.value = 0;
         setTimeout(() => {
@@ -249,15 +357,40 @@ async function pollJob(jobId: string, file: File): Promise<void> {
           scanDisabled.value = false;
           emit("scan-complete", job.result as ScanResult, file);
         }, 200);
+      } else if (job.status === "cancelled") {
+        // Cancelled elsewhere (e.g. this job was Stopped in another tab).
+        // It was intentional, so reset quietly without an error banner.
+        resetToIdle();
       } else if (job.status === "failed") {
-        clearInterval(interval);
+        stopPolling();
+        clearActiveScan();
+        activeJobId.value = null;
         showError(job.error ?? "Processing failed.");
       }
     } catch {
-      clearInterval(interval);
+      stopPolling();
+      clearActiveScan();
+      activeJobId.value = null;
       showError("Network error while polling for result.");
     }
   }, POLL_INTERVAL_MS);
+}
+
+function onStop() {
+  const jobId = activeJobId.value;
+  if (jobId) cancelJob(jobId);
+  resetToIdle();
+}
+
+// Tear down all scan state and return the panel to its pre-scan idle state.
+function resetToIdle() {
+  stopPolling();
+  stopProgressTimer();
+  clearActiveScan();
+  activeJobId.value = null;
+  loading.value = false;
+  scanDisabled.value = false;
+  error.value = "";
 }
 
 function showError(message: string) {
@@ -296,7 +429,14 @@ function showError(message: string) {
       <p v-if="selectedFileName" class="file-hint">Click to choose a different file</p>
     </div>
 
-    <button id="scan-btn" :disabled="scanDisabled" @click="onScan">Scan Document</button>
+    <button
+      id="scan-btn"
+      :class="{ 'is-cancel': loading }"
+      :disabled="!loading && scanDisabled"
+      @click="loading ? onStop() : onScan()"
+    >
+      {{ loading ? "Cancel" : "Scan Document" }}
+    </button>
     <div v-if="loading" class="scan-progress" id="loading" role="status" aria-live="polite">
       <span>{{ progressLabel }}</span>
       <div class="progress-track">
