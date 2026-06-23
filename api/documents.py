@@ -167,6 +167,7 @@ def _run_scan_job(
             # images already large enough (its own memory guard), so this is safe to
             # call whenever the gate trips. detection_count below stays the
             # pre-upscale count — it's only a stat, not used downstream.
+            upscale_secs = 0.0
             if median_height is not None and median_height < MIN_TEXT_HEIGHT_PX:
                 logger.info(
                     "Job %s: upscaling (median text height %.1fpx < %dpx)",
@@ -174,7 +175,9 @@ def _run_scan_job(
                     median_height,
                     MIN_TEXT_HEIGHT_PX,
                 )
-                clean_image = upscale(clean_image)
+                _upscale_start = time.perf_counter()
+                clean_image = upscale(clean_image, median_height)
+                upscale_secs = time.perf_counter() - _upscale_start
 
             # The frontend gives up polling after a fixed budget and calls
             # DELETE /jobs/<id> when it does; checking here before the two
@@ -183,7 +186,14 @@ def _run_scan_job(
             if _is_cancelled(job_id):
                 return
 
+            _ocr_start = time.perf_counter()
             text = extract_text(clean_image)
+            ocr_secs = time.perf_counter() - _ocr_start
+            # Splits the gate's added cost so the upscale-vs-OCR ratio is visible
+            # in logs when tuning factor/method (see pipeline/superres.py).
+            logger.info(
+                "Job %s timing: upscale=%.1fs ocr=%.1fs", job_id, upscale_secs, ocr_secs
+            )
 
             if _is_cancelled(job_id):
                 return

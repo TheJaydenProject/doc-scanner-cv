@@ -28,8 +28,10 @@ through enhancement rather than rejected.
 ## Step 0 — Two decisions (CONFIRMED)
 
 > **Status: both decisions below are approved.** v1 uses bounded whole-page upscale
-> with a single fixed FSRCNN x3 model and a hard reject floor. Recorded here as the
-> agreed design, not open questions.
+> with a hard reject floor. Recorded here as the agreed design, not open questions.
+> **Update (post-v1):** the "single fixed FSRCNN x3" part of Decision B below was
+> superseded shortly after v1 shipped — see "Adaptive factor (shipped)" at the end
+> of this step. Whole-page upscale and the hard floor are unchanged.
 
 ### Decision A — Whole-page upscale (CONFIRMED) vs. per-crop upscale
 
@@ -77,6 +79,28 @@ big photo). So we cap it:
 Concretely for v1: load `FSRCNN_x3.pb`; upscale only when
 `input_megapixels <= MAX_UPSCALE_INPUT_MP` (suggest ~1.5 MP, so x3 output ~13.5 MP).
 Tune after observing VPS behavior.
+
+### Adaptive factor (shipped, post-v1)
+
+v1's fixed x3 always produced 9x the pixel count, and `extract_text()`'s CRNN
+recognition cost scales with the enlarged image's area, not just the SR forward
+pass — so every gated scan paid for 9x recognition even when the median text height
+only needed a 2x lift to clear the 30px gate. This was the dominant cost of the
+upscale path (100-130s vs 40-60s direct), not the FSRCNN pass itself.
+
+`pipeline/superres.py` now picks the **smallest factor that reaches the
+30px target**, clamped to the two models shipped (`FSRCNN_x2.pb`, `FSRCNN_x3.pb`):
+`_choose_factor(median_text_height)` returns 2 when the median is >= 15px (since
+`15 * 2 = 30`) and 3 below that. Most gated scans cluster just under the 30px gate,
+so they now take the x2 (4x pixels) path instead of x3 (9x pixels) -- roughly
+halving the added OCR cost for the common case. `upscale()` takes
+`median_text_height` as a second argument; `documents.py` passes the same
+`median_height` already computed for the gate.
+
+Also added: `UPSCALE_METHOD` ("fsrcnn" | "cubic") in `superres.py`, a one-line A/B
+toggle that swaps the FSRCNN forward pass for plain `cv2.resize(INTER_CUBIC)` at the
+same adaptive factor, for comparing quality/speed on real scans without code changes.
+Default remains `"fsrcnn"`.
 
 ### Decision status
 - [x] Bounded whole-page upscale (not per-crop) for v1. **Confirmed.** Rationale:
@@ -133,11 +157,13 @@ import cv2; print(cv2.dnn_superres.DnnSuperResImpl_create())  # must not raise
 The canonical model OpenCV's `dnn_superres` expects is the TensorFlow `.pb` from the
 Saafke/FSRCNN repo referenced in OpenCV's own docs.
 
-- File: `FSRCNN_x3.pb` (~40 KB)
-- Source: `https://raw.githubusercontent.com/Saafke/FSRCNN_Tensorflow/master/models/FSRCNN_x3.pb`
-  (verify this resolves; it is the standard OpenCV `dnn_superres` FSRCNN model)
+- Files: `FSRCNN_x3.pb` (~40 KB) and `FSRCNN_x2.pb` (~39 KB) — both shipped to
+  support the adaptive factor selection (see "Adaptive factor" in Step 0).
+- Source: `https://raw.githubusercontent.com/Saafke/FSRCNN_Tensorflow/master/models/FSRCNN_x{2,3}.pb`
+  (verify this resolves; these are the standard OpenCV `dnn_superres` FSRCNN models)
 
-**Recommendation: commit it to the repo** at `models/fsrcnn/FSRCNN_x3.pb`.
+**Recommendation: commit them to the repo** at `models/fsrcnn/FSRCNN_x3.pb` and
+`models/fsrcnn/FSRCNN_x2.pb`.
 
 Rationale: it is tiny (~40 KB) and matches how `models/doc_classifier.onnx` is already
 handled (small models committed; only the 93 MB EasyOCR weights are fetched at build
@@ -157,6 +183,13 @@ you object to binary blobs in git. Not recommended for a 40 KB file.)
 ---
 
 ## Step 3 — New module `pipeline/superres.py`
+
+> **Update (post-v1):** the code block below is the original fixed-x3 v1. The
+> shipped module replaced `_FACTOR`/`_get_sr()` with `_choose_factor()` and a
+> per-factor `_sr_by_factor` cache (x2/x3), plus a `UPSCALE_METHOD` toggle for a
+> `cv2.resize(INTER_CUBIC)` fallback — see "Adaptive factor" in Step 0 and the
+> current `pipeline/superres.py`. The singleton/locking pattern and the
+> `MAX_UPSCALE_INPUT_MP` guard described here are unchanged.
 
 Mirror the existing singleton pattern (`ocr._get_reader`, `classifier._get_session`).
 `dnn_superres` networks are not guaranteed thread-safe across the 3-thread pool, so
@@ -259,6 +292,12 @@ if median_height is not None and median_height < MIN_TEXT_HEIGHT_PX:
 text = extract_text(clean_image)
 ```
 
+> **Update (post-v1):** the shipped `_run_scan_job` passes `median_height` through
+> to `upscale(clean_image, median_height)` for adaptive factor selection, and wraps
+> the upscale and `extract_text()` calls with `time.perf_counter()` timing, logged
+> as `Job <id> timing: upscale=Xs ocr=Ys` — added to see the upscale-vs-OCR cost
+> split when tuning factor/method. See current `api/documents.py`.
+
 Notes:
 - `clean_image` is the warped, non-binarized BGR image — same coordinate space the
   MSER boxes were measured in, and exactly what `extract_text()` already consumes.
@@ -286,6 +325,11 @@ Optional polish (not v1): surface `doc_type_source`-style info that a scan was
 ---
 
 ## Step 6 — Tests
+
+> **Update (post-v1):** the shipped `tests/test_superres.py` covers
+> `_choose_factor()`'s x2/x3 selection, adaptive enlargement at both factors, the
+> oversize-image skip, and the `UPSCALE_METHOD = "cubic"` path (4 tests). The
+> `_FACTOR`-based test below is the original v1 version.
 
 **New `tests/test_superres.py`:**
 ```python
