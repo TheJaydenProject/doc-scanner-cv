@@ -12,7 +12,7 @@ from celery import Celery
 from pipeline.classifier import classify_document
 from pipeline.detector import detect_text_regions
 from pipeline.openrouter import correct_ocr_text
-from pipeline.ocr import extract_text, _get_reader
+from pipeline.ocr import extract_text
 from pipeline.scanner import (
     ContourNotFoundError,
     binarize_handwritten,
@@ -177,7 +177,7 @@ def run_scan_job(self, job_id: str, file_path: str, filename: str):
 
     except ContourNotFoundError as e:
         update_job_state(job_id, {"status": "failed", "error": str(e)})
-    except Exception as e:
+    except Exception:
         logger.exception("Internal error processing job %s", job_id)
         update_job_state(job_id, {
             "status": "failed",
