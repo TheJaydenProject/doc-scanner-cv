@@ -9,6 +9,12 @@ _MODEL = "deepseek/deepseek-v4-flash"
 _ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 _TIMEOUT_S = 15
 
+# A correction should track the input length closely (it fixes characters, not
+# content). If the model summarizes/truncates instead of correcting despite the
+# system prompt, the completion comes back much shorter than the input — treat
+# that as a failed correction rather than shipping a mangled result.
+_MIN_LENGTH_RATIO = 0.6
+
 # Refactored prompt: Allows context-driven spelling, casing, and punctuation healing 
 # while maintaining strict structural parity.
 _BASE_PROMPT = (
@@ -93,7 +99,15 @@ def correct_ocr_text(text: str, doc_type: str | None = None) -> str:
         with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:
             payload = json.loads(response.read())
         cleaned = payload["choices"][0]["message"]["content"].strip()
-        return cleaned or text
+        if not cleaned:
+            return text
+        if len(cleaned) < len(text) * _MIN_LENGTH_RATIO:
+            logger.warning(
+                "OCR cleanup returned suspiciously short output (%d chars vs %d raw); returning raw text.",
+                len(cleaned), len(text),
+            )
+            return text
+        return cleaned
     except Exception as e:
         logger.warning("OCR cleanup via OpenRouter failed (%s); returning raw text.", e)
         return text

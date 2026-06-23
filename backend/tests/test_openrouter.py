@@ -55,3 +55,18 @@ def test_blank_completion_falls_back_to_raw(monkeypatch):
     )
 
     assert openrouter.correct_ocr_text("teh cat sat") == "teh cat sat"
+
+
+def test_drastically_short_completion_falls_back_to_raw(monkeypatch):
+    """A completion that summarizes instead of correcting (much shorter than
+    the input) is rejected in favor of the raw text."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    raw = "This is a long paragraph of OCR text that should be corrected verbatim. " * 5
+    payload = {"choices": [{"message": {"content": "Short summary."}}]}
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+    monkeypatch.setattr(
+        openrouter.urllib.request, "urlopen", mock.Mock(return_value=response)
+    )
+
+    assert openrouter.correct_ocr_text(raw) == raw
