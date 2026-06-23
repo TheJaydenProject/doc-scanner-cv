@@ -35,8 +35,6 @@ function openLightbox(src: string) {
     <div class="disclaimer-alert">
       <strong>Note:</strong> Since I have limited resources, this live demo is heavily rate limited (<strong>20 scans per hour</strong>) and it takes around 2 minutes (120s) for one OCR scan to process. If you want faster, more stable OCR, please visit the <a href="https://github.com/TheJaydenProject/doc-scanner-cv" target="_blank" rel="noopener">GitHub repository</a> to clone and run it locally!
     </div>
-
-    <h2>Examples</h2>
     <p class="section-desc">
       Production inputs undergo perspective warping and MSER text-height detection, where scans &lt;8px are rejected outright to conserve compute and those &lt;30px are routed through FSRCNN upscaling prior to OCR.
     </p>
@@ -100,7 +98,6 @@ function openLightbox(src: string) {
   padding: var(--space-3) var(--space-4);
   border: 1px solid rgba(248, 113, 113, 0.2);
   border-radius: var(--radius-sm);
-  margin-bottom: var(--space-3);
   font-size: 13px;
   line-height: 1.5;
 }
