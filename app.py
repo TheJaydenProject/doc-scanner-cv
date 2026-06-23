@@ -2,8 +2,13 @@ import atexit
 
 import cv2
 from flask import Flask, send_from_directory
+from dotenv import load_dotenv
+
 from models import db
 from api.documents import documents_bp, executor, limiter
+
+# Load environment variables from .env file for local development
+load_dotenv()
 
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", static_url_path="")
