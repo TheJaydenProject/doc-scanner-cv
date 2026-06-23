@@ -34,7 +34,7 @@ UPSCALE_FLOOR_PX = 8
 MIN_DETECTION_SAMPLE_SIZE = 5
 
 # Initialize Celery
-redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
 celery_app = Celery("tasks", broker=redis_url)
 
 # Initialize standard Redis client for job state

@@ -34,6 +34,7 @@ def _get_reader() -> easyocr.Reader:
             ["en"],
             gpu=torch.cuda.is_available(),
             model_storage_directory=_MODEL_DIR,
+            user_network_directory=_MODEL_DIR,
             download_enabled=False,
             verbose=False,
         )

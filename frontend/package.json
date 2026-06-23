@@ -2,7 +2,7 @@
   "name": "doc-scanner-cv",
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"vite\" \"cd ../backend && python app.py\"",
     "build": "vue-tsc --noEmit && vite build",
     "check": "biome check src/",
     "format": "biome format --write src/",

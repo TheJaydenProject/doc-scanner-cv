@@ -19,9 +19,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/instance:/app/backend/instance   # Persists scans.db outside the container
-      - shared-uploads:/app/storage
-    expose:
-      - "5000"
+      - shared-uploads:/app/backend/storage
+    ports:
+      - "5000:5000"
     depends_on:
       - redis
     networks:
@@ -43,7 +43,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/instance:/app/backend/instance
-      - shared-uploads:/app/storage
+      - shared-uploads:/app/backend/storage
     depends_on:
       - redis
     networks:
