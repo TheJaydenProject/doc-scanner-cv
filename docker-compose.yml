@@ -52,6 +52,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-doc-scanner-cv
+    profiles: ["prod"]
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
