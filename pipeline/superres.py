@@ -31,7 +31,7 @@ MAX_UPSCALE_INPUT_MP = 1.5
 # uses plain cv2.resize (near-instant, no CNN forward pass, slightly softer). The
 # dominant cost of the gate is OCR on the enlarged image, not the upscale itself,
 # so cubic mainly saves the SR pass — A/B on real small-text scans before switching.
-UPSCALE_METHOD = "fsrcnn"
+UPSCALE_METHOD = "cubic"
 
 # One network per factor, built once and reused (mirrors ocr._get_reader /
 # classifier._get_session). Populated and read only under _sr_lock.
