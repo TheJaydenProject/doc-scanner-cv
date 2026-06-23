@@ -93,13 +93,13 @@ CI/CD                GitHub Actions: ruff + biome lint, type-check, pytest on pu
 | Rate limiting | Flask-Limiter | 4.1.1 |
 | Task queue | Celery | 5.4.0 |
 | Broker / job state | Redis | 5.0.4 (client), `redis:7-alpine` (server) |
-| Computer vision | OpenCV (contrib, headless) | 4.9.0.80 |
+| Computer vision | OpenCV (contrib, headless) | 4.13.0.92 |
 | ONNX inference | onnxruntime | 1.24.4 |
 | OCR | EasyOCR (CRAFT + CRNN) | 1.7.2 |
-| Deep learning runtime | PyTorch (CPU) | 2.2.1 |
+| Deep learning runtime | PyTorch (CPU) | 2.12.1+cpu |
 | Image processing | Pillow | 12.1.1 |
 | WSGI server | Gunicorn | 26.0.0 |
-| Numerical | NumPy | < 2.0 |
+| Numerical | NumPy | 2.4.4 |
 | Backend lint | Ruff | 0.4.4 (CI-pinned) |
 | Frontend | Vue 3 | 3.4.x |
 | Charts | Chart.js | 4.5.x |
