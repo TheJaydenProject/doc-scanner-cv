@@ -33,7 +33,7 @@ function openLightbox(src: string) {
   <section class="panel">
     <h2>Examples</h2>
     <p class="section-desc">
-      These are real scans processed through our pipeline. First, the raw image is straightened and analyzed to measure the text size. If the text is large enough, it goes straight to the OCR engine. If the text is too small, we use an AI super-resolution model to intelligently upscale the image before extracting the text. Any scans with text too tiny to recover are rejected early to save processing time.
+      Production inputs undergo perspective warping and MSER text-height detection, where scans &lt;8px are rejected outright to conserve compute and those &lt;30px are routed through cubic upscaling prior to OCR.
     </p>
 
     <div class="example-grid">

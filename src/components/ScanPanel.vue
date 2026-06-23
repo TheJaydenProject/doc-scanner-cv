@@ -59,7 +59,7 @@ const MIN_SIZE_MULTIPLIER = 0.5;
 const MAX_SIZE_MULTIPLIER = 2;
 
 // The global average behind baseAverageMs is dominated by fast, non-upscaled
-// scans, so it badly underestimates a scan that hits the FSRCNN path (see
+// scans, so it badly underestimates a scan that hits the upscale path (see
 // upscale.md) — that path runs roughly this much longer. Applied once, the
 // moment the backend reports job.stage === "upscaling", instead of baked into
 // every estimate up front.
@@ -512,8 +512,9 @@ function showError(message: string) {
 <style scoped>
 .upload-layout {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-6);
   align-items: flex-start;
+  max-width: 640px;
 }
 
 .upload-controls {
@@ -526,8 +527,8 @@ function showError(message: string) {
 
 .upload-preview {
   flex: 0 0 auto;
-  width: 100px;
-  height: 100px;
+  width: 160px;
+  height: 160px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
