@@ -178,8 +178,14 @@ python app.py
 ```
 The application will be available at `http://localhost:5000`.
 
-If you are developing the frontend and want hot-module replacement (HMR), activate your virtual environment in a terminal and run:
+If you are developing the frontend and want hot-module replacement (HMR), you must activate your virtual environment in your terminal first:
+
 ```bash
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+
 npm run dev
 ```
 This will start both the Flask API backend and the Vite frontend simultaneously. The frontend will be available at `http://localhost:5173`.
