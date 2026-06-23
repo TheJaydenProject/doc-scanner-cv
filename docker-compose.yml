@@ -30,8 +30,13 @@ services:
     build: .
     container_name: doc-scanner-worker
     restart: unless-stopped
-    command: ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
+    command: celery -A tasks.celery_app worker -l info --max-memory-per-child=500000 --max-tasks-per-child=10
     environment:
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - VECLIB_MAXIMUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - REDIS_URL=redis://redis:6379/0
     volumes:

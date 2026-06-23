@@ -36,4 +36,13 @@ RUN npm ci && npm run check && npm run build
 
 EXPOSE 5000
 
+# Create unprivileged user and group
+RUN addgroup --system celerygroup && adduser --system --ingroup celerygroup celeryworker
+
+# Transfer ownership of the container's working directory
+RUN chown -R celeryworker:celerygroup /app
+
+# Drop root privileges for subsequent commands
+USER celeryworker
+
 CMD ["python", "-m", "gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:create_app()"]
