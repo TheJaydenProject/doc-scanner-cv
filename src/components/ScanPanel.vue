@@ -527,8 +527,8 @@ function showError(message: string) {
 
 .upload-preview {
   flex: 0 0 auto;
-  width: 220px;
-  height: 220px;
+  width: 180px;
+  height: 180px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
