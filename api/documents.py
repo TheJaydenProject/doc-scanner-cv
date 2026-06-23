@@ -175,6 +175,12 @@ def _run_scan_job(
                     median_height,
                     MIN_TEXT_HEIGHT_PX,
                 )
+                # Mutated in place (not a full _job_store[job_id] = {...} replace)
+                # so a concurrent cancel_job() setting job["status"] = "cancelled"
+                # on this same dict can't be clobbered by this write landing after
+                # it but before the next _is_cancelled() checkpoint. Lets the
+                # frontend recalibrate its ETA once it knows the slow path fired.
+                _job_store[job_id]["stage"] = "upscaling"
                 _upscale_start = time.perf_counter()
                 clean_image = upscale(clean_image, median_height)
                 upscale_secs = time.perf_counter() - _upscale_start

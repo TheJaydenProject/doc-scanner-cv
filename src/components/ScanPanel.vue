@@ -58,6 +58,13 @@ const REFERENCE_FILE_SIZE_BYTES = 3 * 1024 * 1024;
 const MIN_SIZE_MULTIPLIER = 0.5;
 const MAX_SIZE_MULTIPLIER = 2;
 
+// The global average behind baseAverageMs is dominated by fast, non-upscaled
+// scans, so it badly underestimates a scan that hits the FSRCNN path (see
+// upscale.md) — that path runs roughly this much longer. Applied once, the
+// moment the backend reports job.stage === "upscaling", instead of baked into
+// every estimate up front.
+const UPSCALE_ESTIMATE_MULTIPLIER = 3;
+
 const emit = defineEmits<{
   "scan-complete": [result: ScanResult, file: File | null];
 }>();
@@ -101,6 +108,8 @@ let progressTimer: ReturnType<typeof setInterval> | null = null;
 // Module-scoped (not local to pollJob) so Stop and resume can clear it too.
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let scanStartTime = 0;
+// Guards rescaleEstimateForUpscale() to run at most once per scan.
+let rescaledForUpscale = false;
 
 function saveActiveScan(jobId: string) {
   try {
@@ -167,6 +176,7 @@ async function resumeScan(stored: StoredScan): Promise<void> {
       scanDisabled.value = true;
       activeJobId.value = stored.jobId;
       runProgressTimer(stored.startTime, stored.estimatedDurationMs);
+      if (job.stage === "upscaling") rescaleEstimateForUpscale();
       pollJob(stored.jobId, null);
       return;
     }
@@ -195,6 +205,7 @@ function runProgressTimer(startTime: number, estimateMs: number) {
   scanStartTime = startTime;
   estimatedDurationMs = estimateMs;
   inOverrun.value = false;
+  rescaledForUpscale = false;
 
   const tick = () => {
     const elapsed = Date.now() - scanStartTime;
@@ -227,6 +238,18 @@ function runProgressTimer(startTime: number, estimateMs: number) {
 
   tick(); // Render immediately so a resume doesn't flash 0% for one tick.
   progressTimer = setInterval(tick, PROGRESS_TICK_MS);
+}
+
+// Widens the estimate once the backend reports it has entered the slow
+// upscale path. Skipped once already past the original estimate — by then
+// the overrun crawl already owns the percent, and widening it now would walk
+// percent backwards (Phase 1's ratio = elapsed / newEstimate would compute
+// lower than where the overrun crawl already is). In practice the gate fires
+// within the first few seconds, long before that's a concern.
+function rescaleEstimateForUpscale() {
+  if (rescaledForUpscale || inOverrun.value) return;
+  rescaledForUpscale = true;
+  estimatedDurationMs *= UPSCALE_ESTIMATE_MULTIPLIER;
 }
 
 function stopProgressTimer() {
@@ -345,7 +368,9 @@ function pollJob(jobId: string, file: File | null): void {
       const res = await fetch(`/api/documents/jobs/${jobId}`);
       const job = await res.json();
 
-      if (job.status === "complete") {
+      if (job.status === "processing") {
+        if (job.stage === "upscaling") rescaleEstimateForUpscale();
+      } else if (job.status === "complete") {
         stopPolling();
         stopProgressTimer();
         clearActiveScan();
