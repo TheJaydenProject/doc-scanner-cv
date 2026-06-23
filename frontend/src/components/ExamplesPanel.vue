@@ -94,14 +94,13 @@ function openLightbox(src: string) {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
 }
-
 .disclaimer-alert {
   background: rgba(248, 113, 113, 0.08);
   color: var(--ink);
   padding: var(--space-3) var(--space-4);
-  border-left: 3px solid var(--accent);
+  border: 1px solid rgba(248, 113, 113, 0.2);
   border-radius: var(--radius-sm);
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-3);
   font-size: 13px;
   line-height: 1.5;
 }
