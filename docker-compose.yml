@@ -21,7 +21,10 @@ services:
       - scans-db:/app/backend/instance   # Persists scans.db outside the container
       - shared-uploads:/app/backend/storage
     ports:
-      - "5000:5000"
+      # Localhost only: Docker-published ports bypass the VPS firewall, and 0.0.0.0
+      # exposed the app on the server's real IP (skipping Cloudflare). The tunnel
+      # reaches the app over the internal network (http://doc-scanner-cv:5000).
+      - "127.0.0.1:5000:5000"
     depends_on:
       - redis
     networks:
