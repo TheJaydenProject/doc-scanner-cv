@@ -60,9 +60,17 @@ services:
     container_name: cloudflared-doc-scanner-cv
     profiles: ["prod"]
     restart: unless-stopped
-    command: tunnel --no-autoupdate run
+    # Fixed metrics address so the healthcheck can ask cloudflared whether the tunnel is
+    # connected to Cloudflare (`tunnel ready`), not just whether the process is running.
+    command: tunnel --no-autoupdate --metrics localhost:20241 run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "localhost:20241", "ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       - doc-scanner-cv
     networks:
