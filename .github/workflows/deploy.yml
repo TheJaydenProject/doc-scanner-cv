@@ -111,8 +111,21 @@ jobs:
     needs: [frontend-check, backend-check]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # lets the Tailscale step log in with GitHub's OIDC token
     steps:
       - uses: actions/checkout@v4
+
+      # Joins the tailnet as a short-lived tag:ci device, so the steps below reach the server over
+      # Tailscale (SSH_HOST is its tailnet address). The tailnet policy lets tag:ci reach only SSH.
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          ping: ${{ secrets.SSH_HOST }}
 
       - name: Prepare staging directory on VPS
         uses: appleboy/ssh-action@v1.0.3
