@@ -19,15 +19,18 @@ concurrency:
   group: deploy-doc-scanner-cv-${{ github.ref }}
   cancel-in-progress: true
 
+# Every action is pinned to a full commit SHA (the tag it came from is in the trailing
+# comment). Tags can be moved by whoever controls the action's repo, and the deploy
+# job hands the server's SSH key to some of them.
 jobs:
   # ─── Frontend ────────────────────────────────────────────────────────────────
   frontend-check:
     name: Frontend — Lint & Type-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -63,9 +66,9 @@ jobs:
     env:
       REDIS_URL: redis://localhost:6379/0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -115,12 +118,12 @@ jobs:
       contents: read
       id-token: write   # lets the Tailscale step log in with GitHub's OIDC token
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Joins the tailnet as a short-lived tag:ci device, so the steps below reach the server over
       # Tailscale (SSH_HOST is its tailnet address). The tailnet policy lets tag:ci reach only SSH.
       - name: Connect to Tailscale
-        uses: tailscale/github-action@v4
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           audience: ${{ secrets.TS_AUDIENCE }}
@@ -128,7 +131,7 @@ jobs:
           ping: ${{ secrets.SSH_HOST }}
 
       - name: Prepare staging directory on VPS
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -138,7 +141,7 @@ jobs:
             mkdir -p ~/deploy_staging_doc_scanner
 
       - name: Copy source to staging
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -153,7 +156,7 @@ jobs:
           strip_components: 0
 
       - name: Sync, build & restart
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -167,6 +170,7 @@ jobs:
             echo "==> Syncing source..."
             rsync -a --delete \
               --exclude='.env' \
+              --exclude='docker-compose.override.yml' \
               --exclude='node_modules' \
               --exclude='dist' \
               --exclude='data' \
