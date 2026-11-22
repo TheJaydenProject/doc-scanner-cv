@@ -22,11 +22,20 @@ from tasks import (
 documents_bp = Blueprint("documents", __name__)
 logger = logging.getLogger(__name__)
 
+
+def get_client_ip() -> str:
+    # Every public request arrives through the cloudflared container, so the socket
+    # address is the same tunnel IP for everyone. Cloudflare sets CF-Connecting-IP
+    # to the real visitor and overwrites any value the visitor sends. The only other
+    # way in is 127.0.0.1:5000 on the host itself, which is already trusted.
+    return request.headers.get("CF-Connecting-IP") or get_remote_address()
+
+
 # Global rate limiter — init_app() called in app factory. Backed by Redis (not
 # the default in-process memory store) so the 20/hour cap is shared across all
 # Gunicorn workers instead of each worker enforcing its own separate count.
 limiter = Limiter(
-    key_func=get_remote_address,
+    key_func=get_client_ip,
     default_limits=[],
     storage_uri=os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0"),
 )
@@ -55,7 +64,7 @@ def scan():
     if len(image_bytes) == 0:
         return jsonify({"error": "Empty file."}), 400
 
-    ip = get_remote_address()
+    ip = get_client_ip()
     active_count, ip_active = count_active_jobs(ip)
 
     if ip_active:

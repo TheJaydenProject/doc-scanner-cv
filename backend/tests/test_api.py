@@ -31,6 +31,16 @@ def test_scan_returns_202_and_job_id(client, minimal_jpeg_bytes):
     assert "job_id" in res.get_json()
 
 
+def test_client_ip_prefers_cf_connecting_ip(client):
+    from api.documents import get_client_ip
+
+    app = client.application
+    with app.test_request_context(headers={"CF-Connecting-IP": "203.0.113.7"}, environ_base={"REMOTE_ADDR": "172.18.0.5"}):
+        assert get_client_ip() == "203.0.113.7"
+    with app.test_request_context(environ_base={"REMOTE_ADDR": "172.18.0.5"}):
+        assert get_client_ip() == "172.18.0.5"
+
+
 def test_job_not_found(client):
     res = client.get("/api/documents/jobs/does-not-exist")
     assert res.status_code == 404
