@@ -27,13 +27,13 @@ RUN if [ "$USE_GPU" = "true" ]; then \
       pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121; \
     fi
 
-COPY backend/requirements.txt ./backend/
+COPY backend/requirements.txt backend/constraints.txt ./backend/
 RUN if [ "$USE_GPU" = "true" ]; then \
       grep -v '^torch' backend/requirements.txt > backend/req_no_torch.txt && \
-      pip install --no-cache-dir -r backend/req_no_torch.txt && \
+      pip install --no-cache-dir -r backend/req_no_torch.txt -c backend/constraints.txt && \
       rm backend/req_no_torch.txt; \
     else \
-      pip install --no-cache-dir -r backend/requirements.txt; \
+      pip install --no-cache-dir -r backend/requirements.txt -c backend/constraints.txt; \
     fi
 
 COPY backend/scripts/fetch_ocr_weights.sh ./backend/scripts/
