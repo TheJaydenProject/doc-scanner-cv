@@ -57,8 +57,9 @@ def test_metrics_recent_hides_filenames(client):
         db.session.add(ScanRecord(filename="passport_john.jpg", char_count=10, word_count=2, processing_time_ms=100))
         db.session.commit()
     recent = client.get("/api/documents/metrics").get_json()["recent"]
-    assert len(recent) == 1
-    assert "filename" not in recent[0]
+    # Other tests may leave records behind, so check every entry, not a count.
+    assert recent
+    assert all("filename" not in r for r in recent)
     assert "passport_john" not in json.dumps(recent)
 
 
