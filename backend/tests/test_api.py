@@ -46,10 +46,20 @@ def test_job_not_found(client):
     assert res.status_code == 404
 
 
-def test_history_returns_list(client):
-    res = client.get("/api/documents/history")
-    assert res.status_code == 200
-    assert isinstance(res.get_json(), list)
+def test_history_endpoint_removed(client):
+    assert client.get("/api/documents/history").status_code == 404
+
+
+def test_metrics_recent_hides_filenames(client):
+    from models import ScanRecord, db
+
+    with client.application.app_context():
+        db.session.add(ScanRecord(filename="passport_john.jpg", char_count=10, word_count=2, processing_time_ms=100))
+        db.session.commit()
+    recent = client.get("/api/documents/metrics").get_json()["recent"]
+    assert len(recent) == 1
+    assert "filename" not in recent[0]
+    assert "passport_john" not in json.dumps(recent)
 
 
 def test_metrics_returns_expected_keys(client):

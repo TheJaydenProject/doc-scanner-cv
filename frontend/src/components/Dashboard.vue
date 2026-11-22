@@ -7,7 +7,6 @@ interface MetricsResponse {
   avg_processing_time_ms: number;
   avg_char_count: number;
   recent: Array<{
-    filename: string;
     char_count: number;
     processing_time_ms: number;
     created_at: string;
@@ -32,9 +31,11 @@ async function refresh() {
     avgTime.value = `${data.avg_processing_time_ms}ms`;
     avgChars.value = String(data.avg_char_count);
 
-    const fullLabels = data.recent.map((r) => r.filename);
-    const labels = fullLabels.map((name) =>
-      name.length > 10 ? name.slice(0, 10) + "..." : name,
+    // The API no longer sends filenames (they could expose other visitors'
+    // uploads), so bars are numbered; the tooltip shows when the scan ran.
+    const labels = data.recent.map((_, i) => `Scan ${i + 1}`);
+    const fullLabels = data.recent.map((r) =>
+      new Date(r.created_at).toLocaleString(),
     );
     const charCounts = data.recent.map((r) => r.char_count);
     const processingTimes = data.recent.map((r) => r.processing_time_ms);

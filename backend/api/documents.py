@@ -144,24 +144,9 @@ def cancel_job(job_id: str):
     return jsonify({"status": "ok"}), 200
 
 
-@documents_bp.route("/history", methods=["GET"])
-def history():
-    records = ScanRecord.query.order_by(ScanRecord.created_at.desc()).limit(50).all()
-    return jsonify(
-        [
-            {
-                "id": r.id,
-                "filename": r.filename,
-                "char_count": r.char_count,
-                "word_count": r.word_count,
-                "processing_time_ms": r.processing_time_ms,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in records
-        ]
-    ), 200
-
-
+# Public and unauthenticated, so it returns only numbers. Filenames are left out
+# because they often name people or documents ("passport_john.jpg") and would show
+# one visitor's uploads to everyone. (A /history endpoint listing them was removed.)
 @documents_bp.route("/metrics", methods=["GET"])
 def metrics():
     total = ScanRecord.query.count()
@@ -187,7 +172,6 @@ def metrics():
             "avg_char_count": round(avg_chars),
             "recent": [
                 {
-                    "filename": r.filename,
                     "char_count": r.char_count,
                     "processing_time_ms": r.processing_time_ms,
                     "created_at": r.created_at.isoformat(),

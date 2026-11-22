@@ -363,35 +363,19 @@ Cancels a scan. If the job is still processing, the Celery task is forcefully te
 
 ---
 
-### GET /history
-
-Returns the 50 most recent scan records ordered by `created_at` descending.
-
-```json
-[
-  {
-    "id": 14,
-    "filename": "invoice.jpg",
-    "char_count": 1042,
-    "word_count": 183,
-    "processing_time_ms": 312,
-    "created_at": "2026-06-18T14:23:01.000000"
-  }
-]
-```
-
----
-
 ### GET /metrics
 
-Returns aggregate statistics and the 10 most recent records.
+Returns aggregate statistics and the 10 most recent records. The endpoint is public,
+so it returns numbers only: filenames are never exposed.
 
 ```json
 {
   "total_scans": 42,
   "avg_processing_time_ms": 287,
   "avg_char_count": 894,
-  "recent": [...]
+  "recent": [
+    { "char_count": 1042, "processing_time_ms": 312, "created_at": "2026-06-18T14:23:01.000000" }
+  ]
 }
 ```
 

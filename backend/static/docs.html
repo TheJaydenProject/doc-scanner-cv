@@ -528,50 +528,12 @@ DELETE /api/documents/jobs/a3f2c1d4-...
         <div class="endpoint">
           <div class="method-path">
             <span class="method get">GET</span>
-            <span class="path">/api/documents/history</span>
-          </div>
-          <p class="endpoint-desc">
-            Returns the 50 most recent scan records from the database, ordered
-            newest first.
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Body</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><span class="status ok">200</span></td>
-                <td>Array of scan records</td>
-              </tr>
-            </tbody>
-          </table>
-          <pre>
-// Response 200
-[
-  {
-    "id": 12,
-    "filename": "note.jpg",
-    "char_count": 342,
-    "word_count": 61,
-    "processing_time_ms": 1240,
-    "created_at": "2026-06-17T10:32:00"
-  },
-  ...
-]</pre
-          >
-        </div>
-
-        <div class="endpoint">
-          <div class="method-path">
-            <span class="method get">GET</span>
             <span class="path">/api/documents/metrics</span>
           </div>
           <p class="endpoint-desc">
             Returns aggregated statistics across all scans plus the 10 most
-            recent records. Used to populate the Chart.js dashboard.
+            recent records (numbers only, no filenames). Used to populate the
+            Chart.js dashboard.
           </p>
           <table>
             <thead>
@@ -595,7 +557,6 @@ DELETE /api/documents/jobs/a3f2c1d4-...
   "avg_char_count": 298,
   "recent": [
     {
-      "filename": "note.jpg",
       "char_count": 342,
       "processing_time_ms": 1240,
       "created_at": "2026-06-17T10:32:00"
